@@ -1,0 +1,27 @@
+{
+  "buildVersion": "1.0.0",
+  "localServer": {
+    "enabled": true,
+    "port": 8080
+  },
+  "accounts": [
+    {
+      "alias": "ExamplePlayer",
+      "guid": "example@email.com",
+      "password": "yourSecurePassword",
+      "serverPref": "USWest",
+      "charInfo": {
+        "charId": 1,
+        "nextCharId": 2,
+        "maxNumChars": 2
+      },
+      "proxy": {
+        "host": "proxy.example.com",
+        "port": 8888,
+        "username": "proxyuser",
+        "password": "proxypass"
+      },
+      "pathfinder": true
+    }
+  ]
+}

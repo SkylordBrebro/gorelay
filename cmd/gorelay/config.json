@@ -1,0 +1,26 @@
+{
+  "buildVersion": "1.0.0",
+  "localServer": {
+    "enabled": false,
+    "port": 2050
+  },
+  "debug": false,
+  "autoNexusThreshold": 0.3,
+  "autoHealThreshold": 0.6,
+  "autoHealMP": 0.4,
+  "reconnectDelay": 5000,
+  "safeWalk": true,
+  "autoAim": true,
+  "proxy": {
+    "enabled": false,
+    "host": "",
+    "port": 0,
+    "username": "",
+    "password": ""
+  },
+  "plugins": {
+    "enabled": false,
+    "path": "plugins",
+    "list": []
+  }
+}

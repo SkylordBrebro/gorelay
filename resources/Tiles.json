@@ -1,0 +1,26 @@
+[
+  {
+    "id": 0,
+    "name": "Empty",
+    "noWalk": false,
+    "minDamage": 0,
+    "maxDamage": 0,
+    "speed": 1.0,
+    "sink": false,
+    "push": false,
+    "sinkLevel": 0,
+    "tex": 0
+  },
+  {
+    "id": 1,
+    "name": "Wall",
+    "noWalk": true,
+    "minDamage": 0,
+    "maxDamage": 0,
+    "speed": 0.0,
+    "sink": false,
+    "push": false,
+    "sinkLevel": 0,
+    "tex": 1
+  }
+] 

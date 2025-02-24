@@ -1,0 +1,50 @@
+[
+  {
+    "id": 256,
+    "type": "Player",
+    "displayName": "Player",
+    "class": "Character",
+    "maxHP": 100,
+    "defense": 0,
+    "slotTypes": [1, 2, 3, 4],
+    "equipment": [],
+    "tex1": 0,
+    "tex2": 0,
+    "size": 1,
+    "enemy": false,
+    "god": false,
+    "projectiles": []
+  },
+  {
+    "id": 512,
+    "type": "Enemy",
+    "displayName": "Basic Enemy",
+    "class": "Enemy",
+    "maxHP": 100,
+    "defense": 0,
+    "slotTypes": [],
+    "equipment": [],
+    "tex1": 0,
+    "tex2": 0,
+    "size": 1,
+    "enemy": true,
+    "god": false,
+    "projectiles": [
+      {
+        "id": 0,
+        "type": "Basic Projectile",
+        "speed": 4.0,
+        "minDamage": 10,
+        "maxDamage": 20,
+        "size": 0.5,
+        "amplitude": 0.0,
+        "frequency": 0.0,
+        "wavy": false,
+        "parametric": false,
+        "boomerang": false,
+        "multiHit": false,
+        "passesCover": false
+      }
+    ]
+  }
+] 
