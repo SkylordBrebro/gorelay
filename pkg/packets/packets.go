@@ -148,7 +148,7 @@ type HelloPacket struct {
 	UserToken     string
 }
 
-func (p *HelloPacket) ID() int32 { return PacketHello }
+func (p *HelloPacket) ID() int32 { return HELLO }
 
 // FailurePacket indicates a connection or game error
 type FailurePacket struct {
@@ -156,7 +156,7 @@ type FailurePacket struct {
 	ErrorDescription string
 }
 
-func (p *FailurePacket) ID() int32 { return PacketFailure }
+func (p *FailurePacket) ID() int32 { return FAILURE }
 
 // ClaimLoginRewardMsgPacket for claiming daily login rewards
 type ClaimLoginRewardMsgPacket struct {
@@ -164,42 +164,42 @@ type ClaimLoginRewardMsgPacket struct {
 	Type     string
 }
 
-func (p *ClaimLoginRewardMsgPacket) ID() int32 { return PacketClaimLoginRewardMsg }
+func (p *ClaimLoginRewardMsgPacket) ID() int32 { return CLAIMDAILYREWARD }
 
 // DeletePetPacket for deleting a pet
 type DeletePetPacket struct {
 	PetID int32
 }
 
-func (p *DeletePetPacket) ID() int32 { return PacketDeletePet }
+func (p *DeletePetPacket) ID() int32 { return DELETEPET }
 
 // RequestTradePacket for initiating a trade
 type RequestTradePacket struct {
 	Name string
 }
 
-func (p *RequestTradePacket) ID() int32 { return PacketRequestTrade }
+func (p *RequestTradePacket) ID() int32 { return REQUESTTRADE }
 
 // QuestFetchResponsePacket for quest data
 type QuestFetchResponsePacket struct {
 	Quests []QuestData
 }
 
-func (p *QuestFetchResponsePacket) ID() int32 { return PacketQuestFetchResponse }
+func (p *QuestFetchResponsePacket) ID() int32 { return QUESTFETCHRESPONSE }
 
 // JoinGuildPacket for joining a guild
 type JoinGuildPacket struct {
 	GuildName string
 }
 
-func (p *JoinGuildPacket) ID() int32 { return PacketJoinGuild }
+func (p *JoinGuildPacket) ID() int32 { return JOINGUILD }
 
 // PingPacket for connection keepalive
 type PingPacket struct {
 	Serial int32
 }
 
-func (p *PingPacket) ID() int32 { return PacketPing }
+func (p *PingPacket) ID() int32 { return PING }
 
 // NewTickPacket contains game tick information
 type NewTickPacket struct {
@@ -210,14 +210,14 @@ type NewTickPacket struct {
 	Updates                 []UpdateData
 }
 
-func (p *NewTickPacket) ID() int32 { return PacketNewTick }
+func (p *NewTickPacket) ID() int32 { return NEWTICK }
 
 // PlayerTextPacket for chat messages
 type PlayerTextPacket struct {
 	Text string
 }
 
-func (p *PlayerTextPacket) ID() int32 { return PacketPlayerText }
+func (p *PlayerTextPacket) ID() int32 { return PLAYERTEXT }
 
 // UseItemPacket is sent to use an inventory item
 type UseItemPacket struct {
@@ -227,7 +227,7 @@ type UseItemPacket struct {
 	UseType    int32
 }
 
-func (p *UseItemPacket) ID() int32 { return PacketUseItem }
+func (p *UseItemPacket) ID() int32 { return USEITEM }
 
 // ServerPlayerShootPacket represents another player shooting
 type ServerPlayerShootPacket struct {
@@ -239,7 +239,7 @@ type ServerPlayerShootPacket struct {
 	Damage        int32
 }
 
-func (p *ServerPlayerShootPacket) ID() int32 { return PacketServerPlayerShoot }
+func (p *ServerPlayerShootPacket) ID() int32 { return SERVERPLAYERSHOOT }
 
 // ShowEffectPacket for visual effects
 type ShowEffectPacket struct {
@@ -251,7 +251,7 @@ type ShowEffectPacket struct {
 	Duration       float32
 }
 
-func (p *ShowEffectPacket) ID() int32 { return PacketShowEffect }
+func (p *ShowEffectPacket) ID() int32 { return SHOWEFFECT }
 
 // TradeAcceptedPacket for accepting trades
 type TradeAcceptedPacket struct {
@@ -259,14 +259,14 @@ type TradeAcceptedPacket struct {
 	PartnerOffer []bool
 }
 
-func (p *TradeAcceptedPacket) ID() int32 { return PacketTradeAccepted }
+func (p *TradeAcceptedPacket) ID() int32 { return TRADEACCEPTED }
 
 // GuildRemovePacket for removing guild members
 type GuildRemovePacket struct {
 	Name string
 }
 
-func (p *GuildRemovePacket) ID() int32 { return PacketGuildRemove }
+func (p *GuildRemovePacket) ID() int32 { return GUILDREMOVE }
 
 // PetUpgradeRequestPacket for upgrading pets
 type PetUpgradeRequestPacket struct {
@@ -275,14 +275,7 @@ type PetUpgradeRequestPacket struct {
 	SlotObject   *SlotObjectData
 }
 
-func (p *PetUpgradeRequestPacket) ID() int32 { return PacketPetUpgradeRequest }
-
-// EnterArenaPacket for entering the arena
-type EnterArenaPacket struct {
-	Currency int32
-}
-
-func (p *EnterArenaPacket) ID() int32 { return PacketEnterArena }
+func (p *PetUpgradeRequestPacket) ID() int32 { return PETUPGRADEREQUEST }
 
 // GotoPacket indicates an object moving to a new position
 type GotoPacket struct {
@@ -290,7 +283,7 @@ type GotoPacket struct {
 	Position *WorldPosData
 }
 
-func (p *GotoPacket) ID() int32 { return PacketGoto }
+func (p *GotoPacket) ID() int32 { return GOTO }
 
 // InvSwapPacket for inventory management
 type InvSwapPacket struct {
@@ -300,7 +293,7 @@ type InvSwapPacket struct {
 	SlotObject2 *SlotObjectData
 }
 
-func (p *InvSwapPacket) ID() int32 { return PacketInvSwap }
+func (p *InvSwapPacket) ID() int32 { return INVENTORYSWAP }
 
 // OtherHitPacket for hit notifications
 type OtherHitPacket struct {
@@ -310,7 +303,7 @@ type OtherHitPacket struct {
 	TargetID int32
 }
 
-func (p *OtherHitPacket) ID() int32 { return PacketOtherHit }
+func (p *OtherHitPacket) ID() int32 { return OTHERHIT }
 
 // NameResultPacket for name change results
 type NameResultPacket struct {
@@ -318,7 +311,7 @@ type NameResultPacket struct {
 	ErrorText string
 }
 
-func (p *NameResultPacket) ID() int32 { return PacketNameResult }
+func (p *NameResultPacket) ID() int32 { return NAMERESULT }
 
 // BuyResultPacket for purchase results
 type BuyResultPacket struct {
@@ -326,7 +319,7 @@ type BuyResultPacket struct {
 	ResultString string
 }
 
-func (p *BuyResultPacket) ID() int32 { return PacketBuyResult }
+func (p *BuyResultPacket) ID() int32 { return BUYRESULT }
 
 // HatchPetPacket for hatching pets
 type HatchPetPacket struct {
@@ -334,7 +327,7 @@ type HatchPetPacket struct {
 	PetSkin int32
 }
 
-func (p *HatchPetPacket) ID() int32 { return PacketHatchPet }
+func (p *HatchPetPacket) ID() int32 { return HATCHPET }
 
 // ActivePetUpdateRequestPacket for updating active pets
 type ActivePetUpdateRequestPacket struct {
@@ -342,7 +335,7 @@ type ActivePetUpdateRequestPacket struct {
 	InstanceID  int32
 }
 
-func (p *ActivePetUpdateRequestPacket) ID() int32 { return PacketActivePetUpdateRequest }
+func (p *ActivePetUpdateRequestPacket) ID() int32 { return ACTIVEPETUPDATEREQUEST }
 
 // EnemyHitPacket for enemy hit notifications
 type EnemyHitPacket struct {
@@ -352,7 +345,7 @@ type EnemyHitPacket struct {
 	Kill     bool
 }
 
-func (p *EnemyHitPacket) ID() int32 { return PacketEnemyHit }
+func (p *EnemyHitPacket) ID() int32 { return ENEMYHIT }
 
 // GuildResultPacket for guild operation results
 type GuildResultPacket struct {
@@ -360,7 +353,7 @@ type GuildResultPacket struct {
 	LineBuilderJSON string
 }
 
-func (p *GuildResultPacket) ID() int32 { return PacketGuildResult }
+func (p *GuildResultPacket) ID() int32 { return GUILDRESULT }
 
 // EditAccountListPacket for managing account lists
 type EditAccountListPacket struct {
@@ -369,14 +362,14 @@ type EditAccountListPacket struct {
 	ObjectID      int32
 }
 
-func (p *EditAccountListPacket) ID() int32 { return PacketEditAccountList }
+func (p *EditAccountListPacket) ID() int32 { return EDITACCOUNTLIST }
 
 // TradeChangedPacket for trade updates
 type TradeChangedPacket struct {
 	Offer []bool
 }
 
-func (p *TradeChangedPacket) ID() int32 { return PacketTradeChanged }
+func (p *TradeChangedPacket) ID() int32 { return TRADECHANGED }
 
 // PlayerShootPacket is sent when the player shoots
 type PlayerShootPacket struct {
@@ -387,7 +380,7 @@ type PlayerShootPacket struct {
 	Angle         float32
 }
 
-func (p *PlayerShootPacket) ID() int32 { return PacketPlayerShoot }
+func (p *PlayerShootPacket) ID() int32 { return PLAYERSHOOT }
 
 // PongPacket for responding to ping
 type PongPacket struct {
@@ -395,7 +388,7 @@ type PongPacket struct {
 	Time   int32
 }
 
-func (p *PongPacket) ID() int32 { return PacketPong }
+func (p *PongPacket) ID() int32 { return PONG }
 
 // PetChangeSkinMsgPacket for changing pet skins
 type PetChangeSkinMsgPacket struct {
@@ -403,7 +396,7 @@ type PetChangeSkinMsgPacket struct {
 	SkinType int32
 }
 
-func (p *PetChangeSkinMsgPacket) ID() int32 { return PacketPetChangeSkinMsg }
+func (p *PetChangeSkinMsgPacket) ID() int32 { return CHANGEPETSKIN }
 
 // TradeDonePacket for completed trades
 type TradeDonePacket struct {
@@ -411,7 +404,7 @@ type TradeDonePacket struct {
 	Description string
 }
 
-func (p *TradeDonePacket) ID() int32 { return PacketTradeDone }
+func (p *TradeDonePacket) ID() int32 { return TRADEDONE }
 
 // EnemyShootPacket represents an enemy shooting projectiles
 type EnemyShootPacket struct {
@@ -425,7 +418,7 @@ type EnemyShootPacket struct {
 	AngleInc    float32
 }
 
-func (p *EnemyShootPacket) ID() int32 { return PacketEnemyShoot }
+func (p *EnemyShootPacket) ID() int32 { return ENEMYSHOOT }
 
 // AcceptTradePacket for accepting trades
 type AcceptTradePacket struct {
@@ -433,7 +426,7 @@ type AcceptTradePacket struct {
 	PartnerOffer []bool
 }
 
-func (p *AcceptTradePacket) ID() int32 { return PacketAcceptTrade }
+func (p *AcceptTradePacket) ID() int32 { return ACCEPTTRADE }
 
 // ChangeGuildRankPacket for changing guild ranks
 type ChangeGuildRankPacket struct {
@@ -441,7 +434,7 @@ type ChangeGuildRankPacket struct {
 	GuildRank int32
 }
 
-func (p *ChangeGuildRankPacket) ID() int32 { return PacketChangeGuildRank }
+func (p *ChangeGuildRankPacket) ID() int32 { return CHANGEGUILDRANK }
 
 // PlaySoundPacket for playing sound effects
 type PlaySoundPacket struct {
@@ -449,12 +442,7 @@ type PlaySoundPacket struct {
 	SoundID int32
 }
 
-func (p *PlaySoundPacket) ID() int32 { return PacketPlaySound }
-
-// VerifyEmailPacket for email verification
-type VerifyEmailPacket struct{}
-
-func (p *VerifyEmailPacket) ID() int32 { return PacketVerifyEmail }
+func (p *PlaySoundPacket) ID() int32 { return PLAYSOUND }
 
 // SquareHitPacket for square hit notifications
 type SquareHitPacket struct {
@@ -463,14 +451,14 @@ type SquareHitPacket struct {
 	ObjectID int32
 }
 
-func (p *SquareHitPacket) ID() int32 { return PacketSquareHit }
+func (p *SquareHitPacket) ID() int32 { return SQUAREHIT }
 
 // NewAbilityPacket for new ability unlocks
 type NewAbilityPacket struct {
 	Type int32
 }
 
-func (p *NewAbilityPacket) ID() int32 { return PacketNewAbility }
+func (p *NewAbilityPacket) ID() int32 { return NEWABILITY }
 
 // MovePacket relays player position to server
 type MovePacket struct {
@@ -480,7 +468,7 @@ type MovePacket struct {
 	Records     []MoveRecord
 }
 
-func (p *MovePacket) ID() int32 { return PacketMove }
+func (p *MovePacket) ID() int32 { return MOVE }
 
 // TextPacket represents a chat message
 type TextPacket struct {
@@ -493,7 +481,7 @@ type TextPacket struct {
 	CleanText  string
 }
 
-func (p *TextPacket) ID() int32 { return PacketText }
+func (p *TextPacket) ID() int32 { return TEXT }
 
 // ReconnectPacket for server reconnection
 type ReconnectPacket struct {
@@ -506,7 +494,7 @@ type ReconnectPacket struct {
 	IsFromArena bool
 }
 
-func (p *ReconnectPacket) ID() int32 { return PacketReconnect }
+func (p *ReconnectPacket) ID() int32 { return RECONNECT }
 
 // DeathPacket for player deaths
 type DeathPacket struct {
@@ -518,21 +506,21 @@ type DeathPacket struct {
 	IsZombie   bool
 }
 
-func (p *DeathPacket) ID() int32 { return PacketDeath }
+func (p *DeathPacket) ID() int32 { return DEATH }
 
 // UsePortalPacket for using portals
 type UsePortalPacket struct {
 	ObjectID int32
 }
 
-func (p *UsePortalPacket) ID() int32 { return PacketUsePortal }
+func (p *UsePortalPacket) ID() int32 { return USEPORTAL }
 
 // QuestRoomMsgPacket for quest room messages
 type QuestRoomMsgPacket struct {
 	Message string
 }
 
-func (p *QuestRoomMsgPacket) ID() int32 { return PacketQuestRoomMsg }
+func (p *QuestRoomMsgPacket) ID() int32 { return GOTOQUESTROOM }
 
 // AllyShootPacket for ally shooting
 type AllyShootPacket struct {
@@ -542,41 +530,26 @@ type AllyShootPacket struct {
 	Angle         float32
 }
 
-func (p *AllyShootPacket) ID() int32 { return PacketAllyShoot }
-
-// ImminentArenaWavePacket for arena wave notifications
-type ImminentArenaWavePacket struct {
-	CurrentRuntime int32
-}
-
-func (p *ImminentArenaWavePacket) ID() int32 { return PacketImminentArenaWave }
+func (p *AllyShootPacket) ID() int32 { return ALLYSHOOT }
 
 // ReskinPacket for character reskinning
 type ReskinPacket struct {
 	SkinID int32
 }
 
-func (p *ReskinPacket) ID() int32 { return PacketReskin }
+func (p *ReskinPacket) ID() int32 { return RESKIN }
 
 // ResetDailyQuestsPacket for resetting daily quests
 type ResetDailyQuestsPacket struct{}
 
-func (p *ResetDailyQuestsPacket) ID() int32 { return PacketResetDailyQuests }
-
-// PetChangeFormMsgPacket for pet form changes
-type PetChangeFormMsgPacket struct {
-	PetID  int32
-	SkinID int32
-}
-
-func (p *PetChangeFormMsgPacket) ID() int32 { return PacketPetChangeFormMsg }
+func (p *ResetDailyQuestsPacket) ID() int32 { return RESETDAILYQUESTS }
 
 // InvDropPacket for dropping inventory items
 type InvDropPacket struct {
 	SlotObject *SlotObjectData
 }
 
-func (p *InvDropPacket) ID() int32 { return PacketInvDrop }
+func (p *InvDropPacket) ID() int32 { return INVENTORYDROP }
 
 // LoadPacket for loading into maps
 type LoadPacket struct {
@@ -584,14 +557,14 @@ type LoadPacket struct {
 	IsFromArena bool
 }
 
-func (p *LoadPacket) ID() int32 { return PacketLoad }
+func (p *LoadPacket) ID() int32 { return LOAD }
 
 // CreateGuildPacket for creating guilds
 type CreateGuildPacket struct {
 	Name string
 }
 
-func (p *CreateGuildPacket) ID() int32 { return PacketCreateGuild }
+func (p *CreateGuildPacket) ID() int32 { return CREATEGUILD }
 
 // CreatePacket for creating new characters
 type CreatePacket struct {
@@ -599,7 +572,7 @@ type CreatePacket struct {
 	SkinType  int32
 }
 
-func (p *CreatePacket) ID() int32 { return PacketCreate }
+func (p *CreatePacket) ID() int32 { return CREATE }
 
 // UpdatePacket contains entity updates
 type UpdatePacket struct {
@@ -608,15 +581,7 @@ type UpdatePacket struct {
 	Drops      []int32
 }
 
-func (p *UpdatePacket) ID() int32 { return PacketUpdate }
-
-// GlobalNotificationPacket for global notifications
-type GlobalNotificationPacket struct {
-	Type int32
-	Text string
-}
-
-func (p *GlobalNotificationPacket) ID() int32 { return PacketGlobalNotification }
+func (p *UpdatePacket) ID() int32 { return UPDATE }
 
 // NotificationPacket for player notifications
 type NotificationPacket struct {
@@ -625,7 +590,7 @@ type NotificationPacket struct {
 	Color    int32
 }
 
-func (p *NotificationPacket) ID() int32 { return PacketNotification }
+func (p *NotificationPacket) ID() int32 { return NOTIFICATION }
 
 // AoePacket represents an area of effect attack
 type AoePacket struct {
@@ -639,21 +604,14 @@ type AoePacket struct {
 	ArmorPiercing bool
 }
 
-func (p *AoePacket) ID() int32 { return PacketAoe }
+func (p *AoePacket) ID() int32 { return AOE }
 
 // GotoAckPacket acknowledges a GotoPacket
 type GotoAckPacket struct {
 	Time int32
 }
 
-func (p *GotoAckPacket) ID() int32 { return PacketGotoAck }
-
-// ArenaDeathPacket for arena deaths
-type ArenaDeathPacket struct {
-	Cost int32
-}
-
-func (p *ArenaDeathPacket) ID() int32 { return PacketArenaDeath }
+func (p *GotoAckPacket) ID() int32 { return GOTOACK }
 
 // ClientStatPacket for client statistics
 type ClientStatPacket struct {
@@ -661,14 +619,14 @@ type ClientStatPacket struct {
 	Value int32
 }
 
-func (p *ClientStatPacket) ID() int32 { return PacketClientStat }
+func (p *ClientStatPacket) ID() int32 { return CLIENTSTAT }
 
 // TeleportPacket for player teleportation
 type TeleportPacket struct {
 	ObjectID int32
 }
 
-func (p *TeleportPacket) ID() int32 { return PacketTeleport }
+func (p *TeleportPacket) ID() int32 { return TELEPORT }
 
 // DamagePacket for damage notifications
 type DamagePacket struct {
@@ -680,14 +638,14 @@ type DamagePacket struct {
 	ObjectID     int32
 }
 
-func (p *DamagePacket) ID() int32 { return PacketDamage }
+func (p *DamagePacket) ID() int32 { return DAMAGE }
 
 // ActivePetUpdatePacket for active pet updates
 type ActivePetUpdatePacket struct {
 	PetID int32
 }
 
-func (p *ActivePetUpdatePacket) ID() int32 { return PacketActivePetUpdate }
+func (p *ActivePetUpdatePacket) ID() int32 { return ACTIVEPET }
 
 // InvitedToGuildPacket for guild invites
 type InvitedToGuildPacket struct {
@@ -695,45 +653,40 @@ type InvitedToGuildPacket struct {
 	GuildName string
 }
 
-func (p *InvitedToGuildPacket) ID() int32 { return PacketInvitedToGuild }
+func (p *InvitedToGuildPacket) ID() int32 { return INVITEDTOGUILD }
 
 // PetYardUpdatePacket for pet yard updates
 type PetYardUpdatePacket struct {
 	Type int32
 }
 
-func (p *PetYardUpdatePacket) ID() int32 { return PacketPetYardUpdate }
+func (p *PetYardUpdatePacket) ID() int32 { return PETYARDUPDATE }
 
 // PasswordPromptPacket for password prompts
 type PasswordPromptPacket struct {
 	CleanPasswordStatus int32
 }
 
-func (p *PasswordPromptPacket) ID() int32 { return PacketPasswordPrompt }
-
-// AcceptArenaDeathPacket for accepting arena death
-type AcceptArenaDeathPacket struct{}
-
-func (p *AcceptArenaDeathPacket) ID() int32 { return PacketAcceptArenaDeath }
+func (p *PasswordPromptPacket) ID() int32 { return PASSWORDPROMPT }
 
 // UpdateAckPacket acknowledges an UpdatePacket
 type UpdateAckPacket struct{}
 
-func (p *UpdateAckPacket) ID() int32 { return PacketUpdateAck }
+func (p *UpdateAckPacket) ID() int32 { return UPDATEACK }
 
 // QuestObjIDPacket for quest object IDs
 type QuestObjIDPacket struct {
 	ObjectID int32
 }
 
-func (p *QuestObjIDPacket) ID() int32 { return PacketQuestObjId }
+func (p *QuestObjIDPacket) ID() int32 { return QUESTOBJECTID }
 
 // PICPacket for account security
 type PICPacket struct {
 	PICData string
 }
 
-func (p *PICPacket) ID() int32 { return PacketPic }
+func (p *PICPacket) ID() int32 { return PIC }
 
 // MapInfoPacket contains information about the current map
 type MapInfoPacket struct {
@@ -749,30 +702,21 @@ type MapInfoPacket struct {
 	ExtraXML            []byte
 }
 
-func (p *MapInfoPacket) ID() int32 { return PacketMapInfo }
-
-// LoginRewardMsgPacket for login rewards
-type LoginRewardMsgPacket struct {
-	ItemID   int32
-	Quantity int32
-	Gold     int32
-}
-
-func (p *LoginRewardMsgPacket) ID() int32 { return PacketLoginRewardMsg }
+func (p *MapInfoPacket) ID() int32 { return MAPINFO }
 
 // KeyInfoRequestPacket for key info requests
 type KeyInfoRequestPacket struct {
 	ItemType int32
 }
 
-func (p *KeyInfoRequestPacket) ID() int32 { return PacketKeyInfoRequest }
+func (p *KeyInfoRequestPacket) ID() int32 { return KEYINFOREQUEST }
 
 // InvResultPacket for inventory operation results
 type InvResultPacket struct {
 	Result int32
 }
 
-func (p *InvResultPacket) ID() int32 { return PacketInvResult }
+func (p *InvResultPacket) ID() int32 { return INVENTORYRESULT }
 
 // QuestRedeemResponsePacket for quest redemption responses
 type QuestRedeemResponsePacket struct {
@@ -780,19 +724,19 @@ type QuestRedeemResponsePacket struct {
 	Message string
 }
 
-func (p *QuestRedeemResponsePacket) ID() int32 { return PacketQuestRedeemResponse }
+func (p *QuestRedeemResponsePacket) ID() int32 { return QUESTREDEEMRESPONSE }
 
 // ChooseNamePacket for choosing character names
 type ChooseNamePacket struct {
 	Name string
 }
 
-func (p *ChooseNamePacket) ID() int32 { return PacketChooseName }
+func (p *ChooseNamePacket) ID() int32 { return CHOOSENAME }
 
 // QuestFetchAskPacket for fetching quests
 type QuestFetchAskPacket struct{}
 
-func (p *QuestFetchAskPacket) ID() int32 { return PacketQuestFetchAsk }
+func (p *QuestFetchAskPacket) ID() int32 { return QUESTFETCHASK }
 
 // AccountListPacket for account lists
 type AccountListPacket struct {
@@ -801,14 +745,14 @@ type AccountListPacket struct {
 	LockAction    int32
 }
 
-func (p *AccountListPacket) ID() int32 { return PacketAccountList }
+func (p *AccountListPacket) ID() int32 { return ACCOUNTLIST }
 
 // ShootAckPacket for shoot acknowledgments
 type ShootAckPacket struct {
 	Time int32
 }
 
-func (p *ShootAckPacket) ID() int32 { return PacketShootAck }
+func (p *ShootAckPacket) ID() int32 { return SHOOTACKCOUNTER }
 
 // CreateSuccessPacket for successful character creation
 type CreateSuccessPacket struct {
@@ -816,12 +760,12 @@ type CreateSuccessPacket struct {
 	CharID   int32
 }
 
-func (p *CreateSuccessPacket) ID() int32 { return PacketCreateSuccess }
+func (p *CreateSuccessPacket) ID() int32 { return CREATESUCCESS }
 
 // CheckCreditsPacket for checking credits
 type CheckCreditsPacket struct{}
 
-func (p *CheckCreditsPacket) ID() int32 { return PacketCheckCredits }
+func (p *CheckCreditsPacket) ID() int32 { return CHECKCREDITS }
 
 // GroundDamagePacket for ground damage
 type GroundDamagePacket struct {
@@ -829,19 +773,19 @@ type GroundDamagePacket struct {
 	Position *WorldPosData
 }
 
-func (p *GroundDamagePacket) ID() int32 { return PacketGroundDamage }
+func (p *GroundDamagePacket) ID() int32 { return GROUNDDAMAGE }
 
 // GuildInvitePacket for guild invites
 type GuildInvitePacket struct {
 	Name string
 }
 
-func (p *GuildInvitePacket) ID() int32 { return PacketGuildInvite }
+func (p *GuildInvitePacket) ID() int32 { return GUILDINVITE }
 
 // EscapePacket for escaping to nexus
 type EscapePacket struct{}
 
-func (p *EscapePacket) ID() int32 { return PacketEscape }
+func (p *EscapePacket) ID() int32 { return ESCAPE }
 
 // FilePacket for file transfers
 type FilePacket struct {
@@ -849,21 +793,21 @@ type FilePacket struct {
 	Bytes []byte
 }
 
-func (p *FilePacket) ID() int32 { return PacketFile }
+func (p *FilePacket) ID() int32 { return FILE }
 
 // ReskinUnlockPacket for unlocking skins
 type ReskinUnlockPacket struct {
 	SkinID int32
 }
 
-func (p *ReskinUnlockPacket) ID() int32 { return PacketReskinUnlock }
+func (p *ReskinUnlockPacket) ID() int32 { return UNLOCKCUSTOMIZATION }
 
 // NewCharacterInfoPacket for new character information
 type NewCharacterInfoPacket struct {
 	CharXML string
 }
 
-func (p *NewCharacterInfoPacket) ID() int32 { return PacketNewCharacterInfo }
+func (p *NewCharacterInfoPacket) ID() int32 { return NEWCHARACTERINFORMATION }
 
 // UnlockInfoPacket for unlock information
 type UnlockInfoPacket struct {
@@ -871,7 +815,7 @@ type UnlockInfoPacket struct {
 	UnlockID   int32
 }
 
-func (p *UnlockInfoPacket) ID() int32 { return PacketUnlockInfo }
+func (p *UnlockInfoPacket) ID() int32 { return UNLOCKNEWSLOT }
 
 // QueueInfoPacket for queue information
 type QueueInfoPacket struct {
@@ -880,7 +824,7 @@ type QueueInfoPacket struct {
 	CurrentTime int32
 }
 
-func (p *QueueInfoPacket) ID() int32 { return PacketQueueInfo }
+func (p *QueueInfoPacket) ID() int32 { return QUEUE }
 
 // ExaltationUpdatePacket for exaltation updates
 type ExaltationUpdatePacket struct {
@@ -888,7 +832,7 @@ type ExaltationUpdatePacket struct {
 	Stars   int32
 }
 
-func (p *ExaltationUpdatePacket) ID() int32 { return PacketExaltationUpdate }
+func (p *ExaltationUpdatePacket) ID() int32 { return EXALTATIONBONUSCHANGED }
 
 // VaultInfoPacket for vault information
 type VaultInfoPacket struct {
@@ -897,7 +841,7 @@ type VaultInfoPacket struct {
 	PotionContents []int32
 }
 
-func (p *VaultInfoPacket) ID() int32 { return PacketVaultInfo }
+func (p *VaultInfoPacket) ID() int32 { return VAULTCONTENT }
 
 // ForgeRequestPacket for forge requests
 type ForgeRequestPacket struct {
@@ -905,7 +849,7 @@ type ForgeRequestPacket struct {
 	SlotObject2 *SlotObjectData
 }
 
-func (p *ForgeRequestPacket) ID() int32 { return PacketForgeRequest }
+func (p *ForgeRequestPacket) ID() int32 { return FORGEREQUEST }
 
 // ForgeResponsePacket for forge responses
 type ForgeResponsePacket struct {
@@ -913,14 +857,7 @@ type ForgeResponsePacket struct {
 	Message string
 }
 
-func (p *ForgeResponsePacket) ID() int32 { return PacketForgeResponse }
-
-// BlueprintInfoPacket for blueprint information
-type BlueprintInfoPacket struct {
-	ItemType int32
-}
-
-func (p *BlueprintInfoPacket) ID() int32 { return PacketBlueprintInfo }
+func (p *ForgeResponsePacket) ID() int32 { return FORGERESULT }
 
 // ShowAllyShootPacket for showing ally shots
 type ShowAllyShootPacket struct {
@@ -929,40 +866,21 @@ type ShowAllyShootPacket struct {
 	Angle    float32
 }
 
-func (p *ShowAllyShootPacket) ID() int32 { return PacketShowAllyShoot }
-
-// ChatHelloMsgPacket for chat hello messages
-type ChatHelloMsgPacket struct {
-	AccountID string
-}
-
-func (p *ChatHelloMsgPacket) ID() int32 { return PacketChatHelloMsg }
-
-// ChatTokenMsgPacket for chat token messages
-type ChatTokenMsgPacket struct {
-	Token string
-}
-
-func (p *ChatTokenMsgPacket) ID() int32 { return PacketChatTokenMsg }
-
-// ChatLogoutMsgPacket for chat logout messages
-type ChatLogoutMsgPacket struct{}
-
-func (p *ChatLogoutMsgPacket) ID() int32 { return PacketChatLogoutMsg }
+func (p *ShowAllyShootPacket) ID() int32 { return CHANGEALLYSHOOT }
 
 // ChangeTradePacket for modifying trade offers
 type ChangeTradePacket struct {
 	OfferedItems []bool
 }
 
-func (p *ChangeTradePacket) ID() int32 { return PacketChangeTrade }
+func (p *ChangeTradePacket) ID() int32 { return CHANGETRADE }
 
 // QuestRedeemPacket for redeeming quests
 type QuestRedeemPacket struct {
 	QuestID string
 }
 
-func (p *QuestRedeemPacket) ID() int32 { return PacketQuestRedeem }
+func (p *QuestRedeemPacket) ID() int32 { return QUESTREDEEM }
 
 // SetConditionPacket for setting entity conditions
 type SetConditionPacket struct {
@@ -970,7 +888,7 @@ type SetConditionPacket struct {
 	ConditionDuration float32
 }
 
-func (p *SetConditionPacket) ID() int32 { return PacketSetCondition }
+func (p *SetConditionPacket) ID() int32 { return SETCONDITION }
 
 // KeyInfoResponsePacket for key information responses
 type KeyInfoResponsePacket struct {
@@ -979,7 +897,7 @@ type KeyInfoResponsePacket struct {
 	Creator     string
 }
 
-func (p *KeyInfoResponsePacket) ID() int32 { return PacketKeyInfoResponse }
+func (p *KeyInfoResponsePacket) ID() int32 { return KEYINFORESPONSE }
 
 // RealmHeroesResponsePacket for realm heroes information
 type RealmHeroesResponsePacket struct {
@@ -987,7 +905,7 @@ type RealmHeroesResponsePacket struct {
 	Heroes              []string
 }
 
-func (p *RealmHeroesResponsePacket) ID() int32 { return PacketRealmHeroesResponse }
+func (p *RealmHeroesResponsePacket) ID() int32 { return HEROLEFT }
 
 // BuyPacket for purchasing items
 type BuyPacket struct {
@@ -995,7 +913,7 @@ type BuyPacket struct {
 	Quantity int32
 }
 
-func (p *BuyPacket) ID() int32 { return PacketBuy }
+func (p *BuyPacket) ID() int32 { return BUY }
 
 // TradeStartPacket for initiating trades
 type TradeStartPacket struct {
@@ -1003,7 +921,7 @@ type TradeStartPacket struct {
 	PartnerName string
 }
 
-func (p *TradeStartPacket) ID() int32 { return PacketTradeStart }
+func (p *TradeStartPacket) ID() int32 { return TRADESTART }
 
 // EvolvePetPacket for evolving pets
 type EvolvePetPacket struct {
@@ -1012,14 +930,14 @@ type EvolvePetPacket struct {
 	FinalSkin   int32
 }
 
-func (p *EvolvePetPacket) ID() int32 { return PacketEvolvePet }
+func (p *EvolvePetPacket) ID() int32 { return EVOLVEDPET }
 
 // TradeRequestedPacket for trade requests
 type TradeRequestedPacket struct {
 	Name string
 }
 
-func (p *TradeRequestedPacket) ID() int32 { return PacketTradeRequested }
+func (p *TradeRequestedPacket) ID() int32 { return TRADEREQUESTED }
 
 // AoeAckPacket for acknowledging area of effect
 type AoeAckPacket struct {
@@ -1027,7 +945,7 @@ type AoeAckPacket struct {
 	Position *WorldPosData
 }
 
-func (p *AoeAckPacket) ID() int32 { return PacketAoeAck }
+func (p *AoeAckPacket) ID() int32 { return AOEACK }
 
 // PlayerHitPacket for player hit notifications
 type PlayerHitPacket struct {
@@ -1035,12 +953,12 @@ type PlayerHitPacket struct {
 	ObjectID int32
 }
 
-func (p *PlayerHitPacket) ID() int32 { return PacketPlayerHit }
+func (p *PlayerHitPacket) ID() int32 { return PLAYERHIT }
 
 // CancelTradePacket for canceling trades
 type CancelTradePacket struct{}
 
-func (p *CancelTradePacket) ID() int32 { return PacketCancelTrade }
+func (p *CancelTradePacket) ID() int32 { return CANCELTRADE }
 
 // Encode serializes a packet for network transmission
 func Encode(packet Packet) ([]byte, error) {

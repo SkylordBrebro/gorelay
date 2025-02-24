@@ -12,8 +12,23 @@
 
 ### Core Packages
 - `pkg/account` - Account management and authentication functionality
+  - GUID-based account identification
+  - Account persistence and loading
+  - Server preference management
+  - Credential management
 - `pkg/client` - Client implementation for game connections
+  - Robust connection handling with automatic reconnection
+  - Concurrent packet processing
+  - Game state tracking (players, enemies, projectiles)
+  - Position and movement management
+  - Inventory and stat tracking
+  - Event emission for game updates
 - `pkg/config` - Configuration management and settings
+  - JSON-based configuration
+  - Build version management
+  - Game settings (auto-nexus, healing)
+  - Proxy configuration
+  - Plugin settings
 - `pkg/crypto` - Cryptographic utilities including RC4 and RSA implementations
   - RC4 stream cipher for packet encryption/decryption
   - Separate inbound/outbound cipher streams
@@ -23,6 +38,8 @@
   - Subscription-based event handling
   - Type-safe event data structures
   - Support for custom event handlers
+  - Real-time event dispatching
+  - Event data for players, enemies, projectiles, and maps
 - `pkg/logger` - Logging system for application-wide logging
 - `pkg/models` - Core data models including:
   - Game entities and objects:
@@ -41,19 +58,24 @@
   - Game IDs and endpoints
 - `pkg/packets` - Network packet definitions and handling
   - Core packet types for game state synchronization:
-    - Movement and position updates
-    - Combat actions (shooting, AOE effects)
-    - World state updates (new ticks, map info)
-    - Chat and text messages
-    - Inventory and item usage
+    - Movement and position updates (MovePacket, GotoPacket)
+    - Combat actions (PlayerShootPacket, EnemyShootPacket, AoePacket)
+    - World state updates (NewTickPacket, UpdatePacket)
+    - Chat and text messages (TextPacket)
+    - Inventory and item usage (UseItemPacket)
   - Binary encoding/decoding for network transmission
   - Packet ID system for message routing
+  - Version management for packet compatibility
+  - Packet handlers with type safety
+  - Support for custom packet types
 - `pkg/plugin` - Plugin system for extending functionality
   - Dynamic plugin loading and lifecycle management
   - Packet hook registration system
   - Plugin interface with Initialize/Enable/Disable methods
   - Support for runtime plugin loading and unloading
   - Automatic packet handler registration
+  - Type-safe plugin API
+  - Hot-reloading capabilities
 - `pkg/resources` - Resource management and assets
   - Game object definitions:
     - Objects with properties (HP, defense, equipment slots)
@@ -70,6 +92,8 @@
     - Dynamic walkability updates
     - Efficient node management with priority queue
     - Support for diagonal movement
+    - Real-time path recalculation
+    - Node reuse optimization
   - Random number generation
   - String utilities
   - XML to JSON conversion
@@ -109,6 +133,11 @@ The game uses a binary packet-based protocol with:
    - Tick-based updates
    - Real-time movement recording
    - Server-client time synchronization
+4. Version Management:
+   - Build version tracking
+   - Packet ID mapping
+   - Backward compatibility support
+   - Dynamic packet registration
 
 ### Plugin System
 The plugin architecture provides:
@@ -116,14 +145,22 @@ The plugin architecture provides:
    - Runtime plugin loading and unloading
    - Plugin lifecycle management (Initialize/Enable/Disable)
    - Automatic cleanup on unload
+   - Hot-reloading support
 2. Packet hooks:
    - Automatic method discovery and registration
    - Type-safe packet handling
    - Multiple hooks per packet type
+   - Priority-based hook execution
 3. Plugin interface:
    - Standard metadata (Name, Author, Version)
    - Client instance access
    - Error handling and initialization
+   - Event subscription capabilities
+4. Safety features:
+   - Plugin isolation
+   - Resource cleanup
+   - Error recovery
+   - Version compatibility checks
 
 ### Resource Management
 The resource system handles:
@@ -136,6 +173,7 @@ The resource system handles:
    - JSON-based resource files
    - In-memory caching for performance
    - Type-safe access methods
+   - Lazy loading support
 3. Properties:
    - Object stats (HP, defense)
    - Tile behaviors (walkable, damage)
@@ -148,14 +186,22 @@ The event system provides:
    - Player events (join, leave, move, shoot, hit, death)
    - Enemy events (spawn, death, shoot)
    - Game events (map change, tick, chat)
+   - Custom event support
 2. Event handling:
    - Subscribe/unsubscribe mechanism
    - Type-safe event data
    - Asynchronous event dispatch
+   - Priority-based handling
 3. Event data structures:
    - Player event data (position, stats)
    - Enemy event data (type, position)
    - Chat event data (name, message, recipient)
+   - Map event data (dimensions, properties)
+4. Event filtering:
+   - Event type filtering
+   - Source filtering
+   - Priority filtering
+   - Custom filters
 
 ### Pathfinding
 The A* pathfinding implementation includes:
@@ -163,14 +209,17 @@ The A* pathfinding implementation includes:
    - Optimal path calculation
    - Support for diagonal movement
    - Dynamic walkability updates
+   - Real-time path recalculation
 2. Performance optimizations:
    - Priority queue for efficient node selection
    - Node reuse to minimize allocations
    - Cached calculations
+   - Early exit optimizations
 3. Customization:
    - Configurable heuristics
    - Walkability updates
    - Grid size management
+   - Custom cost functions
 
 ### Application Configuration
 The application uses a structured configuration approach:
@@ -182,10 +231,37 @@ The application uses a structured configuration approach:
    - JSON-based configuration
    - Account credentials and settings
    - Plugin configuration
+   - Game settings
 3. Resource files:
    - Game object definitions
    - Tile properties
    - Resource caching
+   - Version information
+
+### Client Features
+The client implementation provides:
+1. Connection management:
+   - Automatic reconnection
+   - Connection pooling
+   - Timeout handling
+   - Error recovery
+2. Game state tracking:
+   - Player position and stats
+   - Enemy tracking
+   - Projectile management
+   - Inventory system
+3. Event handling:
+   - Real-time updates
+   - State synchronization
+   - Custom event handlers
+4. Plugin support:
+   - Dynamic loading
+   - Event hooks
+   - Custom functionality
+5. Security:
+   - Packet encryption
+   - Secure authentication
+   - Anti-cheat measures
 
 ### Startup Process
 The application initialization follows these steps:
@@ -205,3 +281,4 @@ The application initialization follows these steps:
    - Graceful shutdown on signals
    - Client disconnection
    - Resource cleanup
+   - Plugin unloading
