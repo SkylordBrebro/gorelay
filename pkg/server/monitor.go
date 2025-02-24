@@ -262,14 +262,25 @@ func (ms *MonitorServer) handleStatus(w http.ResponseWriter, r *http.Request) {
 	defer ms.mu.RUnlock()
 
 	uptime := time.Since(ms.startTime)
+	hours := int(uptime.Hours())
+	minutes := int(uptime.Minutes()) % 60
+	seconds := int(uptime.Seconds()) % 60
+
 	lastHeartbeat := time.Since(ms.lastUpdate)
+	isOnline := lastHeartbeat < 30*time.Second
 
 	status := map[string]interface{}{
-		"uptime":        uptime.String(),
+		"uptime": fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds),
+		"uptimeDetails": map[string]int{
+			"hours":   hours,
+			"minutes": minutes,
+			"seconds": seconds,
+		},
 		"clientCount":   len(ms.clients),
 		"memoryUsage":   fmt.Sprintf("%.2f MB", float64(ms.memUsage)/1024/1024),
 		"cpuUsage":      fmt.Sprintf("%.2f ms", ms.cpuUsage),
 		"lastHeartbeat": lastHeartbeat.String(),
+		"isOnline":      isOnline,
 	}
 
 	json.NewEncoder(w).Encode(status)
@@ -439,6 +450,32 @@ const dashboardHTML = `
             margin-top: 5px;
             font-weight: bold;
         }
+
+        .server-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            font-weight: bold;
+            z-index: 1000;
+        }
+
+        .server-status.online {
+            background: var(--success-color);
+            color: #fff;
+        }
+
+        .server-status.offline {
+            background: var(--error-color);
+            color: #fff;
+        }
+
+        .uptime-detail {
+            display: inline-block;
+            padding: 0 5px;
+            font-weight: bold;
+        }
     </style>
     <script>
         function updateStatus() {
@@ -447,12 +484,34 @@ const dashboardHTML = `
                 fetch('/status').then(response => response.json())
             ])
             .then(([clientData, systemData]) => {
-                // Update system stats
+                // Update server status indicator
+                const statusDiv = document.getElementById('server-status');
+                if (systemData.isOnline) {
+                    statusDiv.className = 'server-status online';
+                    statusDiv.textContent = 'Server Online';
+                } else {
+                    statusDiv.className = 'server-status offline';
+                    statusDiv.textContent = 'Server Offline';
+                }
+
+                // Update system stats with detailed uptime
                 const systemStatsDiv = document.getElementById('system-stats');
+                const uptimeDetails = systemData.uptimeDetails;
+                const uptimeHtml = 
+                    '<div class="uptime-detail">' + 
+                    String(uptimeDetails.hours).padStart(2, '0') + 
+                    '</div>:' +
+                    '<div class="uptime-detail">' + 
+                    String(uptimeDetails.minutes).padStart(2, '0') + 
+                    '</div>:' +
+                    '<div class="uptime-detail">' + 
+                    String(uptimeDetails.seconds).padStart(2, '0') + 
+                    '</div>';
+
                 systemStatsDiv.innerHTML = 
                     '<div class="stat-box">' +
                         '<div class="stat-label">Uptime</div>' +
-                        '<div class="stat-value">' + systemData.uptime + '</div>' +
+                        '<div class="stat-value">' + uptimeHtml + '</div>' +
                     '</div>' +
                     '<div class="stat-box">' +
                         '<div class="stat-label">Memory Usage</div>' +
@@ -576,6 +635,7 @@ const dashboardHTML = `
     </script>
 </head>
 <body>
+    <div id="server-status" class="server-status">Server Status</div>
     <h1>GoRelay Monitor</h1>
     <nav>
         <a href="/">Dashboard</a> |

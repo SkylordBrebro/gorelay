@@ -1,5 +1,5 @@
 {
-  "buildVersion": "1.0.0",
+  "buildVersion": "",
   "localServer": {
     "enabled": false,
     "port": 2050
@@ -22,5 +22,6 @@
     "enabled": false,
     "path": "plugins",
     "list": []
-  }
+  },
+  "hwidToken": ""
 }

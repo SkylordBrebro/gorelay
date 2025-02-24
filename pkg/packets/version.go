@@ -3,7 +3,7 @@ package packets
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 )
 
 // VersionManager handles packet versioning and updates
@@ -23,7 +23,7 @@ func NewVersionManager() *VersionManager {
 
 // LoadVersions loads packet versions from a JSON file
 func (vm *VersionManager) LoadVersions(path string) error {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("failed to read versions file: %v", err)
 	}
@@ -84,7 +84,7 @@ func (vm *VersionManager) UpdateVersions(buildVersion string, packetMap map[stri
 		return fmt.Errorf("failed to marshal versions: %v", err)
 	}
 
-	if err := ioutil.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0644); err != nil {
 		return fmt.Errorf("failed to write versions file: %v", err)
 	}
 

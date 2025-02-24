@@ -39,6 +39,8 @@ type Config struct {
 		Path    string   `json:"path"`
 		List    []string `json:"list"`
 	} `json:"plugins"`
+
+	HWIDToken string `json:"hwidToken"`
 }
 
 // LoadConfig loads the configuration from a JSON file
@@ -48,7 +50,7 @@ func LoadConfig(path string) (*Config, error) {
 		if os.IsNotExist(err) {
 			// Create default config if it doesn't exist
 			defaultConfig := &Config{
-				BuildVersion: "1.0.0",
+				BuildVersion: "", // Build version will be fetched dynamically
 				Debug:        false,
 				LocalServer: struct {
 					Enabled bool `json:"enabled"`

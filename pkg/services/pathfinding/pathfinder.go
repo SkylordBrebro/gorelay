@@ -2,6 +2,7 @@ package pathfinding
 
 import (
 	"container/heap"
+	"gorelay/pkg/packets"
 	"math"
 )
 
@@ -195,4 +196,36 @@ func (h *nodeHeap) Pop() interface{} {
 	node.index = -1
 	*h = old[0 : n-1]
 	return node
+}
+
+// WorldToGrid converts world coordinates to grid coordinates
+func WorldToGrid(worldX, worldY float32) (int, int) {
+	return int(math.Floor(float64(worldX))), int(math.Floor(float64(worldY)))
+}
+
+// GridToWorld converts grid coordinates to world coordinates (centered in tile)
+func GridToWorld(gridX, gridY int) (float32, float32) {
+	return float32(gridX) + 0.5, float32(gridY) + 0.5
+}
+
+// FindPathWorld finds a path between world positions and returns world coordinates
+func (p *Pathfinder) FindPathWorld(startPos, endPos *packets.WorldPosData) []*packets.WorldPosData {
+	// Convert world to grid coordinates
+	startX, startY := WorldToGrid(startPos.X, startPos.Y)
+	endX, endY := WorldToGrid(endPos.X, endPos.Y)
+
+	// Find path in grid coordinates
+	nodePath := p.FindPath(startX, startY, endX, endY)
+	if nodePath == nil {
+		return nil
+	}
+
+	// Convert back to world coordinates
+	worldPath := make([]*packets.WorldPosData, len(nodePath))
+	for i, node := range nodePath {
+		worldX, worldY := GridToWorld(node.X, node.Y)
+		worldPath[i] = &packets.WorldPosData{X: worldX, Y: worldY}
+	}
+
+	return worldPath
 }

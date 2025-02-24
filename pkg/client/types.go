@@ -1,7 +1,6 @@
 package client
 
 import (
-	"gorelay/pkg/packets"
 	"time"
 )
 
@@ -67,8 +66,8 @@ type ConditionEffect struct {
 // GameState represents the current state of the game
 type GameState struct {
 	ObjectID      int32
-	WorldPos      *packets.WorldPosData
-	PlayerData    *packets.PlayerData
+	WorldPos      *WorldPosData
+	PlayerData    *PlayerData
 	GameID        int32
 	BuildVer      string
 	LastUpdate    time.Time
@@ -84,8 +83,8 @@ type Projectile struct {
 	Angle      float32
 	Damage     int32
 	StartTime  int64
-	StartPos   *packets.WorldPosData
-	Position   *packets.WorldPosData
+	StartPos   *WorldPosData
+	Position   *WorldPosData
 	Destroyed  bool
 }
 
@@ -93,7 +92,7 @@ type Projectile struct {
 type Enemy struct {
 	ObjectID   int32
 	ObjectType int32
-	Position   *packets.WorldPosData
+	Position   *WorldPosData
 	HP         int32
 	MaxHP      int32
 	Defense    int32
@@ -101,11 +100,6 @@ type Enemy struct {
 	LastMove   time.Time
 	LastHit    time.Time
 	Effects    []int32
-}
-
-// IsDead returns whether the enemy is dead
-func (e *Enemy) IsDead() bool {
-	return e.Dead || e.HP <= 0
 }
 
 // OnGoto updates the enemy's position
@@ -134,7 +128,7 @@ func (e *Enemy) OnDamage(damage int32, armorPiercing bool) {
 type Player struct {
 	ObjectID   int32
 	Name       string
-	Position   *packets.WorldPosData
+	Position   *WorldPosData
 	Stats      map[string]int32
 	Equipment  map[int32]int32 // Slot -> ItemID
 	Class      int32
@@ -175,4 +169,11 @@ type Map struct {
 	Height int32
 	Tiles  [][]int32 // Just store tile types as integers
 	Seed   int32
+}
+
+// StatData represents a stat update from the server
+type StatData struct {
+	StatType    int32
+	StatValue   int32
+	StringValue string
 }

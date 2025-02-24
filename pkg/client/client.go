@@ -1,9 +1,13 @@
 package client
 
 import (
+	"encoding/xml"
 	"fmt"
 	"io"
+	"math"
 	"net"
+	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +19,10 @@ import (
 	"gorelay/pkg/logger"
 	"gorelay/pkg/models"
 	"gorelay/pkg/packets"
+	"gorelay/pkg/packets/client"
+	"gorelay/pkg/packets/dataobjects"
+	"gorelay/pkg/packets/interfaces"
+	"gorelay/pkg/packets/server"
 )
 
 // Client represents a connected RotMG client
@@ -32,8 +40,9 @@ type Client struct {
 	config      *config.Config
 
 	// Packet handling
-	packetHandler *packets.PacketHandler
-	versionMgr    *packets.VersionManager
+	packetHandler      *packets.PacketHandler
+	versionMgr         *packets.VersionManager
+	handlersRegistered bool
 
 	// Game tracking
 	enemies     map[int32]*Enemy
@@ -53,10 +62,33 @@ type Client struct {
 
 	// Logging
 	logger *logger.Logger
+
+	// Movement management
+	nextPositions []*WorldPosData
+	moveSpeed     float32
+	lastMoveTime  time.Time
 }
 
 // NewClient creates a new RotMG client instance
 func NewClient(acc *account.Account, cfg *config.Config, log *logger.Logger) *Client {
+	// First verify the account if needed
+	if acc.NeedAccountVerify() {
+		log.Info("Client", "Verifying account %s...", acc.Alias)
+		if err := acc.VerifyAccount(cfg.HWIDToken); err != nil {
+			log.Error("Client", "Failed to verify account %s: %v", acc.Alias, err)
+			return nil
+		}
+	}
+
+	// Then fetch character list if needed
+	if acc.NeedCharList() {
+		log.Info("Client", "Fetching character list for %s...", acc.Alias)
+		if err := acc.GetCharList(); err != nil {
+			log.Error("Client", "Failed to get character list for %s: %v", acc.Alias, err)
+			return nil
+		}
+	}
+
 	// Fetch server list using account credentials
 	servers, err := models.FetchServers(acc.Email, acc.Password)
 	if err != nil {
@@ -77,6 +109,7 @@ func NewClient(acc *account.Account, cfg *config.Config, log *logger.Logger) *Cl
 				server = s
 				break
 			}
+			log.Warning("Client", "Preferred server %s not found. Using %s instead.", pref, server.Name)
 		}
 	} else {
 		// If no preference, pick first available
@@ -89,10 +122,16 @@ func NewClient(acc *account.Account, cfg *config.Config, log *logger.Logger) *Cl
 	// If somehow we still don't have a server, use default
 	if server == nil {
 		server = models.DefaultServer
+		log.Warning("Client", "No servers available. Using default server.")
 	}
 
 	client := createClient(acc, cfg, log, server)
+	if client == nil {
+		return nil
+	}
+
 	client.state.BuildVer = cfg.BuildVersion
+	log.Info("Client", "Successfully created client for %s on server %s", acc.Alias, server.Name)
 	return client
 }
 
@@ -107,11 +146,21 @@ func createClient(acc *account.Account, cfg *config.Config, log *logger.Logger, 
 		versionMgr:    packets.NewVersionManager(),
 
 		// Initialize game state
-		state:       &GameState{},
+		state: &GameState{
+			WorldPos:      &WorldPosData{X: 0, Y: 0},
+			PlayerData:    &packets.PlayerData{},
+			LastUpdate:    time.Now(),
+			LastFrameTime: time.Now().UnixNano() / int64(time.Millisecond),
+		},
 		enemies:     make(map[int32]*Enemy),
 		players:     make(map[int32]*Player),
 		projectiles: make(map[int32]*Projectile),
 		events:      events.NewEventEmitter(),
+
+		// Initialize movement management
+		nextPositions: make([]*WorldPosData, 0),
+		moveSpeed:     4.0, // Default speed in tiles per second
+		lastMoveTime:  time.Now(),
 
 		// Initialize connection management
 		maxReconnectAttempts: 3,
@@ -122,18 +171,54 @@ func createClient(acc *account.Account, cfg *config.Config, log *logger.Logger, 
 
 	// Register packet handlers
 	client.registerPacketHandlers()
+	client.handlersRegistered = true
 
 	return client
 }
 
 // emit dispatches an event to all subscribed handlers
-func (c *Client) emit(eventType events.EventType, packet packets.Packet, data interface{}) {
-	c.events.Emit(&events.Event{
+func (c *Client) emit(eventType events.EventType, packet interface{}, data interface{}) {
+	// Create an event with the packet
+	event := &events.Event{
 		Type:   eventType,
 		Client: c,
-		Packet: packet,
 		Data:   data,
-	})
+	}
+
+	// Handle different packet types
+	switch p := packet.(type) {
+	case *server.Goto:
+		// Create a wrapper for Goto that adapts the Write method
+		wrapper := &packetWrapper{
+			id: int32(interfaces.Goto),
+			writeFunc: func(w *packets.PacketWriter) error {
+				return p.Write(w)
+			},
+			hasNulls:   func() bool { return false },
+			packetType: interfaces.Goto,
+		}
+		event.Packet = wrapper
+	case *client.PlayerShoot:
+		// Create a wrapper for PlayerShoot that adapts the Write method
+		wrapper := &packetWrapper{
+			id: int32(interfaces.PlayerShoot),
+			writeFunc: func(w *packets.PacketWriter) error {
+				return p.Write(w)
+			},
+			hasNulls:   func() bool { return false },
+			packetType: interfaces.PlayerShoot,
+		}
+		event.Packet = wrapper
+	case packets.Packet:
+		// Use the Packet interface directly if implemented
+		event.Packet = p
+	default:
+		// For other types, just set the packet to nil
+		event.Packet = nil
+	}
+
+	// Emit the event
+	c.events.Emit(event)
 }
 
 // Connect establishes a connection to the game server
@@ -144,6 +229,39 @@ func (c *Client) Connect() error {
 	if c.connected {
 		return fmt.Errorf("client already connected")
 	}
+
+	// Fetch Unity build version from init endpoint
+	buildVersion, err := c.fetchUnityBuildVersion()
+	if err != nil {
+		return fmt.Errorf("failed to fetch Unity build version: %v", err)
+	}
+	c.state.BuildVer = buildVersion
+	c.config.BuildVersion = buildVersion
+
+	// Ensure required components are initialized
+	if c.packetHandler == nil {
+		c.packetHandler = packets.NewPacketHandler()
+	}
+	if c.logger == nil {
+		return fmt.Errorf("logger not initialized")
+	}
+	if c.state == nil {
+		c.state = &GameState{
+			WorldPos:      &WorldPosData{X: 0, Y: 0},
+			PlayerData:    &packets.PlayerData{},
+			LastUpdate:    time.Now(),
+			LastFrameTime: time.Now().UnixNano() / int64(time.Millisecond),
+		}
+	}
+
+	// Initialize RC4 encryption
+	inKey := []byte("c91d9eec420160730d825604e0")
+	outKey := []byte("5a4d2016bc16dc64883194ffd9")
+	rc4Manager, err := crypto.NewRC4Manager(inKey, outKey)
+	if err != nil {
+		return fmt.Errorf("failed to initialize RC4: %v", err)
+	}
+	c.rc4 = rc4Manager
 
 	var lastErr error
 	for attempt := 0; attempt <= c.maxReconnectAttempts; attempt++ {
@@ -170,6 +288,55 @@ func (c *Client) Connect() error {
 		c.conn = conn
 		c.connected = true
 		c.reconnectAttempts = 0
+
+		// Register packet handlers if not already done
+		if !c.handlersRegistered {
+			c.registerPacketHandlers()
+			c.handlersRegistered = true
+		}
+
+		// Create and send Hello packet
+		// We'll need to implement a proper send method that works with the pclient.Hello type
+		// For now, we'll create a simple struct that matches what we need
+		type HelloPacket struct {
+			BuildVersion  string
+			GameNet       string
+			PlayPlatform  string
+			PlatformToken string
+			AccessToken   string
+			KeyTime       int32
+			Key           []byte
+			GameID        int32
+			ClientToken   string
+		}
+
+		// Create the hello packet data
+		helloData := HelloPacket{
+			BuildVersion:  c.state.BuildVer,
+			GameNet:       "Unity",
+			PlayPlatform:  "Unity",
+			PlatformToken: "",
+			AccessToken:   c.accountInfo.AccessToken,
+			KeyTime:       int32(time.Now().Unix()),
+			Key:           []byte{}, // Empty for now
+			GameID:        -2,
+			ClientToken:   c.config.HWIDToken,
+		}
+
+		// TODO: Implement proper packet encoding and sending
+		// This is a placeholder until we implement the proper packet handling
+		c.logger.Info("Client", "Sending Hello packet with build version: %s", helloData.BuildVersion)
+
+		// For now, we'll just create a simple byte array to send
+		// In the future, this should use the proper packet encoding
+		helloBytes := []byte{0x00} // Packet ID 0 for Hello
+		// Append other data...
+
+		if _, err := c.conn.Write(helloBytes); err != nil {
+			c.logger.Error("Client", "Failed to send Hello packet: %v", err)
+			c.conn.Close()
+			continue
+		}
 
 		// Start packet handling goroutine
 		go c.handlePackets()
@@ -198,43 +365,71 @@ func (c *Client) Disconnect() {
 
 // registerPacketHandlers sets up handlers for different packet types
 func (c *Client) registerPacketHandlers() {
+	// Handle Hello packet
+	c.packetHandler.RegisterHandler(0, func(data []byte) error {
+		c.logger.Info("Client", "Handling Hello packet")
+		c.logger.Info("Client", "Hello packet data: % x", data)
+
+		// Log connection details
+		c.logger.Info("Client", "Connection details:")
+		c.logger.Info("Client", "  Build Version: %s", c.state.BuildVer)
+		c.logger.Info("Client", "  Account: %s", c.accountInfo.Alias)
+		c.logger.Info("Client", "  Server: %s", c.server.Name)
+
+		return nil
+	})
+
 	// Handle AoE packets
-	c.packetHandler.RegisterHandler(int((&packets.AoePacket{}).ID()), func(data []byte) error {
-		packet := &packets.AoePacket{}
+	c.packetHandler.RegisterHandler(int(interfaces.AOE), func(data []byte) error {
+		packet := &server.AOE{}
 		// TODO: Implement packet decoding
-		if packet.Pos.SquareDistanceTo(c.state.WorldPos) < packet.Radius*packet.Radius {
-			// Apply AoE damage
-			c.applyDamage(packet.Damage, packet.ArmorPiercing)
+		if packet.Location != nil && c.state.WorldPos != nil {
+			// Convert Location to WorldPosData for distance calculation
+			packetPos := &WorldPosData{X: float32(packet.Location.X), Y: float32(packet.Location.Y)}
+			if packetPos.SquareDistanceTo(c.state.WorldPos) < packet.Radius*packet.Radius {
+				// Apply AoE damage
+				c.applyDamage(int32(packet.Damage), packet.ArmorPierce)
+			}
 		}
 		return nil
 	})
 
 	// Handle enemy shoot packets
-	c.packetHandler.RegisterHandler(int((&packets.EnemyShootPacket{}).ID()), func(data []byte) error {
-		packet := &packets.EnemyShootPacket{}
+	c.packetHandler.RegisterHandler(int(interfaces.EnemyShoot), func(data []byte) error {
+		packet := &server.EnemyShoot{}
 		// TODO: Implement packet decoding
-		if enemy, ok := c.enemies[packet.OwnerID]; ok && !enemy.IsDead() {
-			for i := int32(0); i < packet.NumShots; i++ {
+		if enemy, ok := c.enemies[packet.OwnerId]; ok && !enemy.IsDead() {
+			// Convert Location to WorldPosData
+			startPos := &WorldPosData{X: float32(packet.Location.X), Y: float32(packet.Location.Y)}
+			for i := byte(0); i < packet.NumShots; i++ {
 				angle := packet.Angle + float32(i)*packet.AngleInc
-				c.addProjectile(packet.BulletType, packet.OwnerID, packet.BulletID+i, angle, packet.StartingPos)
+				c.addProjectile(int32(packet.BulletType), packet.OwnerId, int32(packet.BulletId)+int32(i), angle, startPos)
 			}
 		}
 		return nil
 	})
 
 	// Handle new tick packets
-	c.packetHandler.RegisterHandler(int((&packets.NewTickPacket{}).ID()), func(data []byte) error {
-		packet := &packets.NewTickPacket{}
+	c.packetHandler.RegisterHandler(int(interfaces.NewTick), func(data []byte) error {
+		packet := &server.NewTick{}
 		// TODO: Implement packet decoding
 		c.state.LastFrameTime = time.Now().UnixNano() / int64(time.Millisecond)
 
-		// Process updates
-		for _, update := range packet.Updates {
-			if update.ObjectID == c.state.ObjectID {
-				c.state.WorldPos = update.Pos
+		// Process statuses
+		for _, status := range packet.Statuses {
+			if int32(status.ObjectID) == c.state.ObjectID {
+				if status.Position != nil {
+					// Convert Position to WorldPosData
+					c.state.WorldPos = &WorldPosData{X: float32(status.Position.X), Y: float32(status.Position.Y)}
+				}
 				// Update player stats
-				for _, stat := range update.Stats {
-					c.updateStat(stat)
+				for _, stat := range status.Data {
+					// Convert StatsType to int32 and handle string vs int values
+					if stat.IsStringData() {
+						c.updateStat(int32(stat.ID), 0, stat.StringValue)
+					} else {
+						c.updateStat(int32(stat.ID), int32(stat.IntValue), "")
+					}
 				}
 			}
 		}
@@ -242,23 +437,15 @@ func (c *Client) registerPacketHandlers() {
 	})
 
 	// Handle update packets
-	c.packetHandler.RegisterHandler(int((&packets.UpdatePacket{}).ID()), func(data []byte) error {
-		packet := &packets.UpdatePacket{}
+	c.packetHandler.RegisterHandler(int(interfaces.Update), func(data []byte) error {
+		packet := &server.Update{}
 		// TODO: Implement packet decoding
 
 		// Process new objects
-		for _, obj := range packet.NewObjects {
-			if obj.Status.ObjectID == c.state.ObjectID {
-				c.state.WorldPos = obj.Status.Pos
-				// Update player stats
-				for _, stat := range obj.Status.Stats {
-					c.updateStat(stat)
-				}
-				continue
-			}
-
-			// Handle other objects based on type
-			c.handleNewObject(obj)
+		for _, entity := range packet.NewObjs {
+			// Handle entity based on its properties
+			// This will need to be adjusted based on the actual structure of Entity
+			c.handleNewObject(entity)
 		}
 
 		// Process dropped objects
@@ -270,64 +457,64 @@ func (c *Client) registerPacketHandlers() {
 	})
 
 	// Handle text packets
-	c.packetHandler.RegisterHandler(int((&packets.TextPacket{}).ID()), func(data []byte) error {
-		packet := &packets.TextPacket{}
+	c.packetHandler.RegisterHandler(int(interfaces.Text), func(data []byte) error {
+		packet := &server.Text{}
 		// TODO: Implement packet decoding
 
-		// Handle chat messages
-		if packet.Recipient == c.state.PlayerData.Name {
-			c.handlePrivateMessage(packet)
-		} else {
-			c.handleChatMessage(packet)
-		}
+		// Handle chat messages based on the Text packet
+		c.handleChatMessage(packet)
 		return nil
 	})
 
 	// Handle failure packets
-	c.packetHandler.RegisterHandler(int((&packets.FailurePacket{}).ID()), func(data []byte) error {
-		packet := &packets.FailurePacket{}
+	c.packetHandler.RegisterHandler(int(interfaces.Failure), func(data []byte) error {
+		packet := &server.Failure{}
 		// TODO: Implement packet decoding
-		switch packet.ErrorID {
-		case packets.IncorrectVersion:
+		switch packet.ErrorId {
+		case int32(4): // IncorrectVersion
 			c.logger.Info("Client", "Build version out of date. Updating and reconnecting...")
 			// Update build version in config and state
-			c.config.BuildVersion = packet.ErrorDescription
-			c.state.BuildVer = packet.ErrorDescription
+			c.config.BuildVersion = packet.ErrorMessage
+			c.state.BuildVer = packet.ErrorMessage
 			// Save updated config
 			if err := config.SaveConfig("config.json", c.config); err != nil {
 				c.logger.Error("Client", "Failed to save updated build version: %v", err)
 			}
 			// Reconnect with new version
 			c.reconnect()
-		case packets.InvalidTeleportTarget:
+		case int32(5): // InvalidTeleportTarget
 			c.logger.Warning("Client", "Invalid teleport target")
-		case packets.EmailVerificationNeeded:
+		case int32(7): // EmailVerificationNeeded
 			c.logger.Error("Client", "Email verification required")
-		case packets.BadKey:
+		case int32(8): // BadKey
 			c.logger.Error("Client", "Invalid key used")
-			// Reset key info
-		case packets.InvalidCharacter:
+		case int32(11): // InvalidCharacter
 			c.logger.Info("Client", "Character not found. Creating new character...")
 			// TODO: Handle character creation
 		default:
-			c.logger.Error("Client", "Received failure %d: %s", packet.ErrorID, packet.ErrorDescription)
+			c.logger.Error("Client", "Received failure %d: %s", packet.ErrorId, packet.ErrorMessage)
 		}
 		return nil
 	})
 
 	// Handle goto packets
-	c.packetHandler.RegisterHandler(int((&packets.GotoPacket{}).ID()), func(data []byte) error {
-		packet := &packets.GotoPacket{}
+	c.packetHandler.RegisterHandler(int(interfaces.Goto), func(data []byte) error {
+		packet := &server.Goto{}
 		// TODO: Implement packet decoding
 
-		// Send acknowledgment
-		ack := &packets.GotoAckPacket{
-			Time: int32(c.state.LastFrameTime),
-		}
-		c.send(ack)
+		// Create and send acknowledgment
+		ack := client.NewGotoAck()
+		ack.Time = int32(c.state.LastFrameTime)
+		ack.Unknown = false
 
-		if packet.ObjectID == c.state.ObjectID {
-			c.state.WorldPos = packet.Position
+		if err := c.send(ack); err != nil {
+			c.logger.Error("Client", "Failed to send GotoAck: %v", err)
+		}
+
+		if packet.ObjectId == c.state.ObjectID {
+			// Convert Location to WorldPosData
+			pos := &WorldPosData{X: float32(packet.Location.X), Y: float32(packet.Location.Y)}
+			c.state.WorldPos = pos
 			c.emit(events.EventPlayerMove, packet, &events.PlayerEventData{
 				PlayerData: c.state.PlayerData,
 				Position:   c.state.WorldPos,
@@ -337,10 +524,9 @@ func (c *Client) registerPacketHandlers() {
 	})
 
 	// Handle player shoot
-	c.packetHandler.RegisterHandler(int((&packets.PlayerShootPacket{}).ID()), func(data []byte) error {
-		packet := &packets.PlayerShootPacket{}
+	c.packetHandler.RegisterHandler(int(interfaces.PlayerShoot), func(data []byte) error {
+		packet := client.NewPlayerShoot()
 		// TODO: Implement packet decoding
-
 		c.emit(events.EventPlayerShoot, packet, nil)
 		return nil
 	})
@@ -352,11 +538,11 @@ func (c *Client) applyDamage(damage int32, armorPiercing bool) {
 	// TODO: Implement damage calculation and application
 }
 
-func (c *Client) addProjectile(bulletType, ownerID, bulletID int32, angle float32, startPos *packets.WorldPosData) {
+func (c *Client) addProjectile(bulletType, ownerID, bulletID int32, angle float32, startPos *WorldPosData) {
 	// TODO: Implement projectile tracking
 }
 
-func (c *Client) updateStat(stat packets.StatData) {
+func (c *Client) updateStat(statType int32, statValue int32, stringValue string) {
 	if c.state.PlayerData == nil {
 		c.state.PlayerData = &packets.PlayerData{
 			Stats:     make(map[string]int32),
@@ -364,78 +550,78 @@ func (c *Client) updateStat(stat packets.StatData) {
 		}
 	}
 
-	switch stat.StatType {
+	switch statType {
 	case models.MAXHPSTAT:
-		c.state.PlayerData.MaxHP = stat.StatValue
+		c.state.PlayerData.MaxHP = statValue
 	case models.HPSTAT:
-		c.state.PlayerData.HP = stat.StatValue
+		c.state.PlayerData.HP = statValue
 	case models.MAXMPSTAT:
-		c.state.PlayerData.MaxMP = stat.StatValue
+		c.state.PlayerData.MaxMP = statValue
 	case models.MPSTAT:
-		c.state.PlayerData.MP = stat.StatValue
+		c.state.PlayerData.MP = statValue
 	case models.NEXTLEVELEXPSTAT:
-		c.state.PlayerData.NextLevelExp = stat.StatValue
+		c.state.PlayerData.NextLevelExp = statValue
 	case models.EXPSTAT:
-		c.state.PlayerData.Exp = stat.StatValue
+		c.state.PlayerData.Exp = statValue
 	case models.LEVELSTAT:
-		c.state.PlayerData.Level = stat.StatValue
+		c.state.PlayerData.Level = statValue
 	case models.NAMESTAT:
-		c.state.PlayerData.Name = stat.StringValue
+		c.state.PlayerData.Name = stringValue
 	case models.ATTACKSTAT:
-		c.state.PlayerData.Stats["atk"] = stat.StatValue
+		c.state.PlayerData.Stats["atk"] = statValue
 	case models.DEFENSESTAT:
-		c.state.PlayerData.Stats["def"] = stat.StatValue
+		c.state.PlayerData.Stats["def"] = statValue
 	case models.SPEEDSTAT:
-		c.state.PlayerData.Stats["spd"] = stat.StatValue
+		c.state.PlayerData.Stats["spd"] = statValue
 	case models.DEXTERITYSTAT:
-		c.state.PlayerData.Stats["dex"] = stat.StatValue
+		c.state.PlayerData.Stats["dex"] = statValue
 	case models.VITALITYSTAT:
-		c.state.PlayerData.Stats["vit"] = stat.StatValue
+		c.state.PlayerData.Stats["vit"] = statValue
 	case models.WISDOMSTAT:
-		c.state.PlayerData.Stats["wis"] = stat.StatValue
+		c.state.PlayerData.Stats["wis"] = statValue
 	case models.FAMESTAT:
-		c.state.PlayerData.Fame = stat.StatValue
+		c.state.PlayerData.Fame = statValue
 	case models.CURRFAMESTAT:
-		c.state.PlayerData.CurrentFame = stat.StatValue
+		c.state.PlayerData.CurrentFame = statValue
 	case models.NUMSTARSSTAT:
-		c.state.PlayerData.Stars = stat.StatValue
+		c.state.PlayerData.Stars = statValue
 	case models.ACCOUNTIDSTAT:
-		c.state.PlayerData.AccountID = stat.StringValue
+		c.state.PlayerData.AccountID = stringValue
 	case models.GUILDNAMESTAT:
-		c.state.PlayerData.GuildName = stat.StringValue
+		c.state.PlayerData.GuildName = stringValue
 	case models.GUILDRANKSTAT:
-		c.state.PlayerData.GuildRank = stat.StatValue
+		c.state.PlayerData.GuildRank = statValue
 	case models.HEALTHPOTIONSTACKSTAT:
-		c.state.PlayerData.HPPots = stat.StatValue
+		c.state.PlayerData.HPPots = statValue
 	case models.MAGICPOTIONSTACKSTAT:
-		c.state.PlayerData.MPPots = stat.StatValue
+		c.state.PlayerData.MPPots = statValue
 	case models.HASBACKPACKSTAT:
-		c.state.PlayerData.HasBackpack = stat.StatValue == 1
+		c.state.PlayerData.HasBackpack = statValue == 1
 	default:
 		// Handle inventory slots
-		if stat.StatType >= models.INVENTORY0STAT && stat.StatType <= models.INVENTORY11STAT {
-			slot := int(stat.StatType - models.INVENTORY0STAT)
+		if statType >= models.INVENTORY0STAT && statType <= models.INVENTORY11STAT {
+			slot := int(statType - models.INVENTORY0STAT)
 			if slot >= 0 && slot < len(c.state.PlayerData.Inventory) {
-				c.state.PlayerData.Inventory[slot] = stat.StatValue
+				c.state.PlayerData.Inventory[slot] = statValue
 			}
-		} else if stat.StatType >= models.BACKPACK0STAT && stat.StatType <= models.BACKPACK7STAT {
-			slot := int(stat.StatType - models.BACKPACK0STAT + 12) // Offset by 12 inventory slots
+		} else if statType >= models.BACKPACK0STAT && statType <= models.BACKPACK7STAT {
+			slot := int(statType - models.BACKPACK0STAT + 12) // Offset by 12 inventory slots
 			if slot >= 0 && slot < len(c.state.PlayerData.Inventory) {
-				c.state.PlayerData.Inventory[slot] = stat.StatValue
+				c.state.PlayerData.Inventory[slot] = statValue
 			}
 		}
 	}
 }
 
-func (c *Client) handleNewObject(obj packets.ObjectData) {
+func (c *Client) handleNewObject(obj interface{}) {
 	// TODO: Implement object handling based on type
 }
 
-func (c *Client) handlePrivateMessage(packet *packets.TextPacket) {
+func (c *Client) handlePrivateMessage(packet interface{}) {
 	// TODO: Implement private message handling
 }
 
-func (c *Client) handleChatMessage(packet *packets.TextPacket) {
+func (c *Client) handleChatMessage(packet interface{}) {
 	// TODO: Implement chat message handling
 }
 
@@ -475,14 +661,14 @@ func (c *Client) GetMap() *Map {
 }
 
 // GetPosition returns the client's current position
-func (c *Client) GetPosition() *packets.WorldPosData {
+func (c *Client) GetPosition() *WorldPosData {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.state.WorldPos
 }
 
 // SetPosition updates the client's position
-func (c *Client) SetPosition(pos *packets.WorldPosData) {
+func (c *Client) SetPosition(pos *WorldPosData) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.state.WorldPos = pos
@@ -531,9 +717,58 @@ func (c *Client) handlePackets() {
 			return
 		}
 
-		// Process the packet
-		if err := c.packetHandler.HandlePacket(int(buffer[0]), buffer[1:n]); err != nil {
+		// Make a copy of the data for decryption
+		decryptedData := make([]byte, n)
+		copy(decryptedData, buffer[:n])
+
+		// Decrypt the data if RC4 is initialized
+		if c.rc4 != nil {
+			c.rc4.Decrypt(decryptedData)
+		} else {
+			c.logger.Warning("Client", "RC4 not initialized, processing raw data")
+		}
+
+		// Log packet details before processing
+		if n > 0 {
+			packetID := int(decryptedData[0])
+			c.logger.Debug("Client", "Received packet - ID: %d, Size: %d bytes", packetID, n)
+
+			// Log both encrypted and decrypted data for debugging
+			if len(buffer[:n]) > 0 {
+				maxBytes := 16
+				if len(buffer[:n]) < maxBytes {
+					maxBytes = len(buffer[:n])
+				}
+				c.logger.Debug("Client", "Encrypted data (first %d bytes): % x", maxBytes, buffer[:maxBytes])
+				c.logger.Debug("Client", "Decrypted data (first %d bytes): % x", maxBytes, decryptedData[:maxBytes])
+			}
+
+			// Special handling for Hello packet (ID 0)
+			if packetID == 0 {
+				c.logger.Info("Client", "Received Hello packet response")
+				c.logger.Debug("Client", "Full Hello packet data: % x", decryptedData)
+
+				// Try to decode the Hello packet
+				if len(decryptedData) > 1 {
+					c.logger.Info("Client", "Hello packet details:")
+					c.logger.Info("Client", "  Build Version: %s", c.state.BuildVer)
+					c.logger.Info("Client", "  Account: %s", c.accountInfo.Alias)
+					c.logger.Info("Client", "  Connected to: %s", c.server.Name)
+				}
+			}
+
+			// If we have a version manager, try to get the packet name
+			if c.versionMgr != nil {
+				if packetName, err := c.versionMgr.GetPacketName(packetID); err == nil {
+					c.logger.Debug("Client", "Packet type: %s", packetName)
+				}
+			}
+		}
+
+		// Process the decrypted packet
+		if err := c.packetHandler.HandlePacket(int(decryptedData[0]), decryptedData[1:n]); err != nil {
 			c.logger.Error("Client", "Error handling packet: %v", err)
+			// Don't return on packet handling errors, continue processing other packets
 		}
 	}
 }
@@ -597,8 +832,8 @@ func (c *Client) reconnect() {
 	}()
 }
 
-// Add send method
-func (c *Client) send(packet packets.Packet) error {
+// send sends a packet to the server
+func (c *Client) send(packet interface{}) error {
 	if !c.connected {
 		return fmt.Errorf("not connected")
 	}
@@ -608,15 +843,59 @@ func (c *Client) send(packet packets.Packet) error {
 		return fmt.Errorf("failed to set write deadline: %v", err)
 	}
 
-	data, err := packets.Encode(packet)
+	var data []byte
+	var err error
+
+	// Handle different packet types
+	switch p := packet.(type) {
+	case *client.GotoAck:
+		// Create a wrapper for GotoAck
+		wrapper := &packetWrapper{
+			id:         int32(interfaces.GotoAck),
+			writeFunc:  p.Write,
+			hasNulls:   func() bool { return false },
+			packetType: interfaces.GotoAck,
+		}
+		data, err = packets.EncodePacket(wrapper)
+	case *client.PlayerShoot:
+		// Create a wrapper for PlayerShoot
+		wrapper := &packetWrapper{
+			id:         int32(interfaces.PlayerShoot),
+			writeFunc:  p.Write,
+			hasNulls:   func() bool { return false },
+			packetType: interfaces.PlayerShoot,
+		}
+		data, err = packets.EncodePacket(wrapper)
+	case *client.Move:
+		// Create a wrapper for Move
+		wrapper := &packetWrapper{
+			id:         int32(interfaces.Move),
+			writeFunc:  p.Write,
+			hasNulls:   func() bool { return false },
+			packetType: interfaces.Move,
+		}
+		data, err = packets.EncodePacket(wrapper)
+	case packets.Packet:
+		// Use the Packet interface directly if implemented
+		data, err = packets.EncodePacket(p)
+	default:
+		return fmt.Errorf("unsupported packet type: %T", packet)
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to encode packet: %v", err)
 	}
 
+	// Log outgoing packet for debugging
+	c.logger.Debug("Client", "Sending packet, data: % x", data)
+
+	// Encrypt if RC4 is initialized
 	if c.rc4 != nil {
 		c.rc4.Encrypt(data)
+		c.logger.Debug("Client", "Encrypted data: % x", data)
 	}
 
+	// Send the packet
 	_, err = c.conn.Write(data)
 	return err
 }
@@ -648,4 +927,235 @@ func (c *Client) GetCurrentServer() *models.Server {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.server
+}
+
+// moveTo updates the client's position for smooth movement
+func (c *Client) moveTo(target *WorldPosData) bool {
+	if target == nil {
+		return false
+	}
+
+	now := time.Now()
+	elapsed := now.Sub(c.lastMoveTime).Seconds()
+	c.lastMoveTime = now
+
+	step := float32(elapsed) * c.moveSpeed
+
+	// Calculate distance to target
+	dx := target.X - c.state.WorldPos.X
+	dy := target.Y - c.state.WorldPos.Y
+	distSq := dx*dx + dy*dy
+
+	// If we can reach target in this step
+	if distSq <= step*step {
+		c.state.WorldPos.X = target.X
+		c.state.WorldPos.Y = target.Y
+		if len(c.nextPositions) > 0 {
+			c.nextPositions = c.nextPositions[1:]
+		}
+		return true
+	}
+
+	// Move towards target
+	angle := float32(math.Atan2(float64(dy), float64(dx)))
+	c.state.WorldPos.X += float32(math.Cos(float64(angle))) * step
+	c.state.WorldPos.Y += float32(math.Sin(float64(angle))) * step
+
+	return true
+}
+
+// AddPath adds a path of positions to move through
+func (c *Client) AddPath(path []*WorldPosData) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.nextPositions = append(c.nextPositions, path...)
+}
+
+// ClearPath clears the movement queue
+func (c *Client) ClearPath() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.nextPositions = c.nextPositions[:0]
+}
+
+// HasNextPosition returns whether there are more positions to move to
+func (c *Client) HasNextPosition() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.nextPositions) > 0
+}
+
+// GetNextPosition returns the next target position, or nil if none
+func (c *Client) GetNextPosition() *WorldPosData {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.nextPositions) == 0 {
+		return nil
+	}
+	return c.nextPositions[0]
+}
+
+// Update handles client updates including movement
+func (c *Client) Update() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if len(c.nextPositions) > 0 {
+		if moved := c.moveTo(c.nextPositions[0]); moved {
+			// Create a new Move packet
+			movePacket := client.NewMove()
+			movePacket.TickID = int32(time.Now().UnixNano() / int64(time.Millisecond))
+			movePacket.Time = int32(c.state.LastFrameTime)
+
+			// Create a location record with the current position
+			record := dataobjects.NewLocationRecord()
+			record.Time = int32(c.state.LastFrameTime)
+			record.Position = dataobjects.NewLocationWithCoords(float64(c.state.WorldPos.X), float64(c.state.WorldPos.Y))
+
+			// Add the record to the packet
+			movePacket.Records = append(movePacket.Records, record)
+
+			// Encode and send the packet
+			if c.connected {
+				// Create a wrapper that implements the packets.Packet interface
+				wrapper := &packetWrapper{
+					id:         int32(interfaces.Move),
+					writeFunc:  movePacket.Write,
+					hasNulls:   func() bool { return false },
+					packetType: interfaces.Move,
+				}
+
+				// Encode the packet
+				data, err := packets.EncodePacket(wrapper)
+				if err != nil {
+					c.logger.Error("Client", "Failed to encode Move packet: %v", err)
+					return
+				}
+
+				// Log outgoing packet for debugging
+				c.logger.Debug("Client", "Sending Move packet, data: % x", data)
+
+				// Encrypt if RC4 is initialized
+				if c.rc4 != nil {
+					c.rc4.Encrypt(data)
+					c.logger.Debug("Client", "Encrypted data: % x", data)
+				}
+
+				// Send the packet
+				if _, err := c.conn.Write(data); err != nil {
+					c.logger.Error("Client", "Failed to send Move packet: %v", err)
+				}
+			}
+		}
+	}
+}
+
+// packetWrapper is a helper struct to adapt client/server packets to the packets.Packet interface
+type packetWrapper struct {
+	id         int32
+	writeFunc  func(w *packets.PacketWriter) error
+	hasNulls   func() bool
+	packetType interfaces.PacketType
+}
+
+func (p *packetWrapper) ID() int32 {
+	return p.id
+}
+
+func (p *packetWrapper) Write(w interfaces.Writer) error {
+	if pw, ok := w.(*packets.PacketWriter); ok {
+		return p.writeFunc(pw)
+	}
+	return fmt.Errorf("expected *packets.PacketWriter, got %T", w)
+}
+
+func (p *packetWrapper) Read(r interfaces.Reader) error {
+	return fmt.Errorf("read not implemented for wrapper")
+}
+
+func (p *packetWrapper) String() string {
+	return fmt.Sprintf("PacketWrapper(ID=%d, Type=%v)", p.id, p.packetType)
+}
+
+func (p *packetWrapper) HasNulls() bool {
+	return p.hasNulls()
+}
+
+func (p *packetWrapper) Structure() string {
+	return fmt.Sprintf("PacketWrapper(ID=%d, Type=%v)", p.id, p.packetType)
+}
+
+func (p *packetWrapper) Type() interfaces.PacketType {
+	return p.packetType
+}
+
+// Add new function to fetch Unity build version
+func (c *Client) fetchUnityBuildVersion() (string, error) {
+	baseURL := "https://www.realmofthemadgod.com/app/init"
+
+	// Create HTTP client with appropriate headers
+	client := &http.Client{}
+
+	// Prepare form data
+	data := make(url.Values)
+	data.Set("platform", "standalonewindows64")
+	data.Set("key", "9KnJFxtTvLu2frXv")
+	data.Set("game_net", "Unity")
+	data.Set("play_platform", "Unity")
+	data.Set("game_net_user_id", "")
+
+	// Create request
+	req, err := http.NewRequest("POST", baseURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %v", err)
+	}
+
+	// Set Unity-specific headers
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-Unity-Version", "2021.3.16f1")
+	req.Header.Set("User-Agent", "UnityPlayer/2021.3.16f1 (UnityWebRequest/1.0, libcurl/7.84.0-DEV)")
+
+	// Send request
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("server returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Read response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %v", err)
+	}
+
+	// Log response for debugging
+	c.logger.Debug("Client", "Init response: %s", string(body))
+
+	// Parse XML response
+	doc := &struct {
+		XMLName      xml.Name `xml:"AppSettings"`
+		BuildHash    string   `xml:"BuildHash"`
+		BuildCDN     string   `xml:"BuildCDN"`
+		BuildVersion string   `xml:"BuildVersion"`
+	}{}
+
+	if err := xml.Unmarshal(body, doc); err != nil {
+		return "", fmt.Errorf("failed to parse XML response: %v", err)
+	}
+
+	// Return BuildVersion if available, otherwise use BuildHash
+	if doc.BuildVersion != "" {
+		return doc.BuildVersion, nil
+	}
+	if doc.BuildHash != "" {
+		return doc.BuildHash, nil
+	}
+
+	return "", fmt.Errorf("neither BuildVersion nor BuildHash found in response")
 }

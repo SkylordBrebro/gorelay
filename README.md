@@ -29,7 +29,7 @@
   - Game settings (auto-nexus, healing)
   - Proxy configuration
   - Plugin settings
-- `pkg/crypto` - Cryptographic utilities including RC4 and RSA implementations
+- `pkg/crypto` - Cryptographic utilities including RC4 implementations
   - RC4 stream cipher for packet encryption/decryption
   - Separate inbound/outbound cipher streams
   - Secure key management

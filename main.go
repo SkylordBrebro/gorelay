@@ -5,7 +5,9 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
+	"time"
 
 	"gorelay/pkg/account"
 	"gorelay/pkg/client"
@@ -50,31 +52,75 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create clients for each account
-	clients := make([]*client.Client, 0)
-	for _, acc := range accManager.Accounts {
-		client := client.NewClient(acc, cfg, logger)
-		clients = append(clients, client)
+	// Create wait group for managing client goroutines
+	var wg sync.WaitGroup
+	clients := make([]*client.Client, len(accManager.Accounts))
+	clientMutex := sync.RWMutex{}
 
-		// Create plugin manager for each client
-		pluginManager := plugin.NewManager(client)
+	// Create and connect clients concurrently
+	for i, acc := range accManager.Accounts {
+		wg.Add(1)
+		go func(index int, acc *account.Account) {
+			defer wg.Done()
 
-		// Load plugins if enabled
-		if cfg.Plugins.Enabled {
-			for _, pluginPath := range cfg.Plugins.List {
-				if err := pluginManager.LoadPlugin(pluginPath); err != nil {
-					logger.Error("Main", "Failed to load plugin %s: %v", pluginPath, err)
-					continue
+			// Create client
+			client := client.NewClient(acc, cfg, logger)
+
+			// Create plugin manager
+			pluginManager := plugin.NewManager(client)
+
+			// Load plugins if enabled
+			if cfg.Plugins.Enabled {
+				for _, pluginPath := range cfg.Plugins.List {
+					if err := pluginManager.LoadPlugin(pluginPath); err != nil {
+						logger.Error("Main", "Failed to load plugin %s for account %s: %v", pluginPath, acc.Alias, err)
+						continue
+					}
 				}
 			}
-		}
 
-		// Connect client
-		if err := client.Connect(); err != nil {
-			logger.Error("Main", "Failed to connect client %s: %v", acc.Alias, err)
-			continue
-		}
+			// Add client to slice with proper synchronization
+			clientMutex.Lock()
+			clients[index] = client
+			clientMutex.Unlock()
+
+			// Connect client with retries
+			maxRetries := 3
+			for retry := 0; retry < maxRetries; retry++ {
+				if err := client.Connect(); err != nil {
+					logger.Error("Main", "Failed to connect client %s (attempt %d/%d): %v",
+						acc.Alias, retry+1, maxRetries, err)
+					if retry < maxRetries-1 {
+						time.Sleep(time.Second * 2) // Wait before retry
+						continue
+					}
+				} else {
+					logger.Info("Main", "Successfully connected client %s", acc.Alias)
+					break
+				}
+			}
+
+			// Start client update loop in a separate goroutine
+			go func() {
+				ticker := time.NewTicker(time.Millisecond * 50) // 20 updates per second
+				defer ticker.Stop()
+
+				for {
+					select {
+					case <-ticker.C:
+						if client.IsConnected() {
+							client.Update()
+						}
+					}
+				}
+			}()
+
+		}(i, acc)
 	}
+
+	// Wait for all clients to be created and connected
+	wg.Wait()
+	logger.Info("Main", "All clients initialized")
 
 	// Handle shutdown gracefully
 	sigChan := make(chan os.Signal, 1)
@@ -83,10 +129,19 @@ func main() {
 	<-sigChan
 	logger.Info("Main", "Shutting down...")
 
-	// Disconnect all clients
-	for _, client := range clients {
-		if client.IsConnected() {
-			client.Disconnect()
+	// Disconnect all clients concurrently
+	var shutdownWg sync.WaitGroup
+	for _, c := range clients {
+		if c == nil {
+			continue
 		}
+		shutdownWg.Add(1)
+		go func(c *client.Client) {
+			defer shutdownWg.Done()
+			if c.IsConnected() {
+				c.Disconnect()
+			}
+		}(c)
 	}
+	shutdownWg.Wait()
 }
