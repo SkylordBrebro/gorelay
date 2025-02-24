@@ -4,114 +4,38 @@ package models
 type PetAbility int32
 
 const (
-	PetAbilityAttackClose PetAbility = iota
-	PetAbilityAttackMid
-	PetAbilityAttackFar
-	PetAbilityElectric
-	PetAbilityHeal
-	PetAbilityMagicHeal
-	PetAbilitySavage
-	PetAbilityDecoy
-	PetAbilityRising
-	PetAbilityMayhemClose
-	PetAbilityMayhemMid
-	PetAbilityMayhemFar
+	PetAbilityAttackClose PetAbility = 0x192
+	PetAbilityAttackMid   PetAbility = 0x194
+	PetAbilityAttackFar   PetAbility = 0x195
+	PetAbilityElectric    PetAbility = 0x196
+	PetAbilityHeal        PetAbility = 0x197
+	PetAbilityMagicHeal   PetAbility = 0x198
+	PetAbilitySavage      PetAbility = 0x199
+	PetAbilityDecoy       PetAbility = 0x19a
+	PetAbilityRisingFury  PetAbility = 0x19b
 )
-
-// String returns the string representation of the pet ability
-func (pa PetAbility) String() string {
-	switch pa {
-	case PetAbilityAttackClose:
-		return "Attack Close"
-	case PetAbilityAttackMid:
-		return "Attack Mid"
-	case PetAbilityAttackFar:
-		return "Attack Far"
-	case PetAbilityElectric:
-		return "Electric"
-	case PetAbilityHeal:
-		return "Heal"
-	case PetAbilityMagicHeal:
-		return "Magic Heal"
-	case PetAbilitySavage:
-		return "Savage"
-	case PetAbilityDecoy:
-		return "Decoy"
-	case PetAbilityRising:
-		return "Rising Fury"
-	case PetAbilityMayhemClose:
-		return "Mayhem Close"
-	case PetAbilityMayhemMid:
-		return "Mayhem Mid"
-	case PetAbilityMayhemFar:
-		return "Mayhem Far"
-	default:
-		return "Unknown"
-	}
-}
 
 // Pet represents a pet entity
 type Pet struct {
 	ID            int32
 	Name          string
 	Type          int32
-	Rarity        string
-	Family        string
+	Rarity        int32
+	Family        int32
 	FirstAbility  PetAbility
 	SecondAbility PetAbility
 	ThirdAbility  PetAbility
-	Level         int32
 	MaxLevel      int32
 	Abilities     map[PetAbility]struct {
 		Level     int32
 		Points    int32
 		MaxPoints int32
 	}
-}
-
-// PetYardType represents different types of pet yards
-type PetYardType int32
-
-const (
-	PetYardCommon PetYardType = iota
-	PetYardUncommon
-	PetYardRare
-	PetYardLegendary
-	PetYardDivine
-)
-
-// String returns the string representation of the pet yard type
-func (pyt PetYardType) String() string {
-	switch pyt {
-	case PetYardCommon:
-		return "Common"
-	case PetYardUncommon:
-		return "Uncommon"
-	case PetYardRare:
-		return "Rare"
-	case PetYardLegendary:
-		return "Legendary"
-	case PetYardDivine:
-		return "Divine"
-	default:
-		return "Unknown"
-	}
-}
-
-// MaxLevel returns the maximum level for pets in this yard type
-func (pyt PetYardType) MaxLevel() int32 {
-	switch pyt {
-	case PetYardCommon:
-		return 30
-	case PetYardUncommon:
-		return 50
-	case PetYardRare:
-		return 70
-	case PetYardLegendary:
-		return 90
-	case PetYardDivine:
-		return 100
-	default:
-		return 0
-	}
+	OwnerID    int32
+	ObjectID   int32
+	HP         int32
+	Size       int32
+	Condition  int32
+	Texture    int32
+	InstanceID int32
 }

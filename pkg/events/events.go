@@ -57,6 +57,18 @@ const (
 	// Map events
 	EventMapInfo
 	EventTileUpdate
+
+	// Additional connection events
+	EventHello
+	EventLoad
+	EventCreate
+	EventCreateSuccess
+	EventPing
+	EventPong
+
+	// Additional game events
+	EventGroundDamage
+	EventNotification
 )
 
 // Event represents an event in the game

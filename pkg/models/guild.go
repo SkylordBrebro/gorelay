@@ -4,30 +4,13 @@ package models
 type GuildRank int32
 
 const (
-	GuildRankInitiate GuildRank = iota
-	GuildRankMember
-	GuildRankOfficer
-	GuildRankLeader
-	GuildRankFounder
+	GuildRankNoRank   GuildRank = -1
+	GuildRankInitiate GuildRank = 0
+	GuildRankMember   GuildRank = 10
+	GuildRankOfficer  GuildRank = 20
+	GuildRankLeader   GuildRank = 30
+	GuildRankFounder  GuildRank = 40
 )
-
-// String returns the string representation of the guild rank
-func (gr GuildRank) String() string {
-	switch gr {
-	case GuildRankInitiate:
-		return "Initiate"
-	case GuildRankMember:
-		return "Member"
-	case GuildRankOfficer:
-		return "Officer"
-	case GuildRankLeader:
-		return "Leader"
-	case GuildRankFounder:
-		return "Founder"
-	default:
-		return "Unknown"
-	}
-}
 
 // Guild represents a guild in the game
 type Guild struct {
