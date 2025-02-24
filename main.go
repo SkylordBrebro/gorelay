@@ -12,7 +12,6 @@ import (
 	"gorelay/pkg/config"
 	"gorelay/pkg/logger"
 	"gorelay/pkg/plugin"
-	"gorelay/pkg/resources"
 )
 
 func main() {
@@ -42,17 +41,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Load resources
-	resManager := resources.NewResourceManager()
-	if err := resManager.LoadResources("resources/Objects.json", "resources/Tiles.json"); err != nil {
-		logger.Error("Main", "Failed to load resources: %v", err)
-		os.Exit(1)
-	}
-
 	// Create clients for each account
 	clients := make([]*client.Client, 0)
 	for _, acc := range accManager.Accounts {
-		client := client.NewClient(acc, resManager, logger)
+		client := client.NewClient(acc, cfg, logger)
 		clients = append(clients, client)
 
 		// Create plugin manager for each client

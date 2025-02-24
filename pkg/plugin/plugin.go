@@ -2,7 +2,10 @@ package plugin
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"plugin"
+	"strings"
 
 	"gorelay/pkg/client"
 	"gorelay/pkg/models"
@@ -161,4 +164,33 @@ func (m *Manager) GetPlugins() []Plugin {
 		plugins = append(plugins, plugin.Instance)
 	}
 	return plugins
+}
+
+// LoadPluginsFromDirectory loads all enabled plugins from the specified directory
+func (m *Manager) LoadPluginsFromDirectory(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("failed to read plugin directory: %v", err)
+	}
+
+	for _, entry := range entries {
+		// Skip directories and non-Go files
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
+			continue
+		}
+
+		// Skip disabled plugins (prefixed with -)
+		if strings.HasPrefix(entry.Name(), "-") {
+			m.client.GetLogger().Info("PluginManager", "Skipping disabled plugin: %s", entry.Name())
+			continue
+		}
+
+		pluginPath := filepath.Join(dir, entry.Name())
+		if err := m.LoadPlugin(pluginPath); err != nil {
+			m.client.GetLogger().Error("PluginManager", "Failed to load plugin %s: %v", entry.Name(), err)
+			continue
+		}
+	}
+
+	return nil
 }

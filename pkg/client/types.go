@@ -5,6 +5,65 @@ import (
 	"time"
 )
 
+// GameObject represents a game object with its properties
+type GameObject struct {
+	Type                    int32
+	ID                      string
+	Enemy                   bool
+	Item                    bool
+	God                     bool
+	Pet                     bool
+	SlotType                int32
+	BagType                 int32
+	Class                   string
+	MaxHitPoints            int32
+	Defense                 int32
+	XPMultiplier            float32
+	Projectiles             []ProjectileInfo
+	ActivateOnEquip         []StatBonus
+	RateOfFire              float32
+	NumProjectiles          int32
+	ArcGap                  float32
+	FameBonus               int32
+	FeedPower               int32
+	OccupySquare            bool
+	FullOccupy              bool
+	ProtectFromGroundDamage bool
+}
+
+// ProjectileInfo represents projectile properties
+type ProjectileInfo struct {
+	ID               int32
+	ObjectID         string
+	Damage           int32
+	ArmorPiercing    bool
+	MinDamage        int32
+	MaxDamage        int32
+	Speed            float32
+	LifetimeMS       int32
+	Parametric       bool
+	Wavy             bool
+	Boomerang        bool
+	MultiHit         bool
+	PassesCover      bool
+	Amplitude        float32
+	Frequency        float32
+	Magnitude        float32
+	ConditionEffects []ConditionEffect
+}
+
+// StatBonus represents stat changes when equipping items
+type StatBonus struct {
+	StatType int32
+	Amount   int32
+}
+
+// ConditionEffect represents status effects applied by projectiles
+type ConditionEffect struct {
+	EffectName string
+	Duration   float32
+}
+
 // GameState represents the current state of the game
 type GameState struct {
 	ObjectID      int32
@@ -16,7 +75,7 @@ type GameState struct {
 	LastFrameTime int64
 }
 
-// Projectile represents a projectile in the game
+// Projectile represents an active projectile in the game
 type Projectile struct {
 	ID         int32
 	OwnerID    int32
@@ -41,8 +100,7 @@ type Enemy struct {
 	Dead       bool
 	LastMove   time.Time
 	LastHit    time.Time
-	Effects    []int32                // Status effects
-	Properties map[string]interface{} // Additional properties from resources
+	Effects    []int32
 }
 
 // IsDead returns whether the enemy is dead
@@ -85,7 +143,7 @@ type Player struct {
 	Guild      string
 	LastMove   time.Time
 	LastAction time.Time
-	Effects    []int32 // Status effects
+	Effects    []int32
 }
 
 // OnGoto updates the player's position
@@ -110,18 +168,11 @@ func (p *Player) HasEffect(effect int32) bool {
 	return false
 }
 
-// Tile represents a map tile
-type Tile struct {
-	Type     int32
-	ObjectID int32
-	Position *packets.WorldPosData
-}
-
 // Map represents the current game map
 type Map struct {
 	Name   string
 	Width  int32
 	Height int32
-	Tiles  [][]Tile
+	Tiles  [][]int32 // Just store tile types as integers
 	Seed   int32
 }

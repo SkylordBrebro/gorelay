@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"gorelay/pkg/account"
+	"gorelay/pkg/config"
 	"gorelay/pkg/crypto"
 	"gorelay/pkg/events"
 	"gorelay/pkg/logger"
 	"gorelay/pkg/models"
 	"gorelay/pkg/packets"
-	"gorelay/pkg/resources"
 )
 
 // Client represents a connected RotMG client
@@ -29,10 +29,7 @@ type Client struct {
 	// Game state
 	state       *GameState
 	accountInfo *account.Account
-
-	// Resources
-	resources *resources.ResourceManager
-	logger    *logger.Logger
+	config      *config.Config
 
 	// Packet handling
 	packetHandler *packets.PacketHandler
@@ -53,17 +50,20 @@ type Client struct {
 	reconnectDelay       time.Duration
 	readTimeout          time.Duration
 	writeTimeout         time.Duration
+
+	// Logging
+	logger *logger.Logger
 }
 
 // NewClient creates a new RotMG client instance
-func NewClient(acc *account.Account, res *resources.ResourceManager, log *logger.Logger) *Client {
+func NewClient(acc *account.Account, cfg *config.Config, log *logger.Logger) *Client {
 	// Fetch server list using account credentials
 	servers, err := models.FetchServers(acc.Email, acc.Password)
 	if err != nil {
 		log.Warning("Client", "Failed to fetch servers: %v. Using default server.", err)
 		// Use the default server instead of trying to fetch the list
 		server := models.DefaultServer
-		return createClient(acc, res, log, server)
+		return createClient(acc, cfg, log, server)
 	}
 
 	// Get server from account preference or pick first available
@@ -91,14 +91,16 @@ func NewClient(acc *account.Account, res *resources.ResourceManager, log *logger
 		server = models.DefaultServer
 	}
 
-	return createClient(acc, res, log, server)
+	client := createClient(acc, cfg, log, server)
+	client.state.BuildVer = cfg.BuildVersion
+	return client
 }
 
 // createClient creates a new client instance with the given server
-func createClient(acc *account.Account, res *resources.ResourceManager, log *logger.Logger, server *models.Server) *Client {
+func createClient(acc *account.Account, cfg *config.Config, log *logger.Logger, server *models.Server) *Client {
 	client := &Client{
 		accountInfo:   acc,
-		resources:     res,
+		config:        cfg,
 		logger:        log,
 		server:        server,
 		packetHandler: packets.NewPacketHandler(),
@@ -113,7 +115,7 @@ func createClient(acc *account.Account, res *resources.ResourceManager, log *log
 
 		// Initialize connection management
 		maxReconnectAttempts: 3,
-		reconnectDelay:       5 * time.Second,
+		reconnectDelay:       time.Duration(cfg.ReconnectDelay) * time.Millisecond,
 		readTimeout:          30 * time.Second,
 		writeTimeout:         10 * time.Second,
 	}
@@ -288,8 +290,15 @@ func (c *Client) registerPacketHandlers() {
 		switch packet.ErrorID {
 		case packets.IncorrectVersion:
 			c.logger.Info("Client", "Build version out of date. Updating and reconnecting...")
+			// Update build version in config and state
+			c.config.BuildVersion = packet.ErrorDescription
 			c.state.BuildVer = packet.ErrorDescription
-			// TODO: Update build version
+			// Save updated config
+			if err := config.SaveConfig("config.json", c.config); err != nil {
+				c.logger.Error("Client", "Failed to save updated build version: %v", err)
+			}
+			// Reconnect with new version
+			c.reconnect()
 		case packets.InvalidTeleportTarget:
 			c.logger.Warning("Client", "Invalid teleport target")
 		case packets.EmailVerificationNeeded:

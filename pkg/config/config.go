@@ -111,3 +111,13 @@ func (c *Config) Save(path string) error {
 
 	return nil
 }
+
+// SaveConfig saves the configuration back to the JSON file
+func SaveConfig(path string, cfg *Config) error {
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, data, 0644)
+}
