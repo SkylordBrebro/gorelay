@@ -4,60 +4,92 @@ import (
 	"gorelay/pkg/packets"
 )
 
-// EventType represents different types of game events
+// EventType represents different types of events
 type EventType int
 
 const (
-	// Player events
-	EventPlayerJoin EventType = iota
-	EventPlayerLeave
-	EventPlayerMove
-	EventPlayerShoot
+	// Connection events
+	EventConnect EventType = iota
+	EventDisconnect
+	EventReconnect
+	EventServerSwitch
+
+	// Game state events
+	EventTick
+	EventUpdate
+	EventNewTick
+	EventShowEffect
+	EventDeath
+	EventReconnectRequest
+	EventGotoAck
+	EventAoeAck
+	EventShootAck
 	EventPlayerHit
-	EventPlayerDeath
+	EventEnemyHit
+	EventOtherHit
+
+	// Player events
+	EventPlayerShoot
+	EventPlayerMove
+	EventPlayerTeleport
+	EventPlayerDamage
+	EventPlayerHeal
+	EventPlayerChat
+	EventPlayerText
 
 	// Enemy events
-	EventEnemySpawn
-	EventEnemyDeath
 	EventEnemyShoot
+	EventEnemyMove
+	EventEnemyDeath
+	EventNewEnemy
+	EventEnemyUpdate
 
-	// Game events
-	EventMapChange
-	EventTick
-	EventChat
+	// Projectile events
+	EventProjectileSpawn
+	EventProjectileDestroy
+	EventProjectileHit
+
+	// Item events
+	EventInventoryUpdate
+	EventItemDrop
+	EventItemPickup
+
+	// Map events
+	EventMapInfo
+	EventTileUpdate
 )
 
-// Event represents a game event
+// Event represents an event in the game
 type Event struct {
 	Type   EventType
-	Client interface{} // Using interface{} to avoid import cycle
+	Client interface{}
 	Packet packets.Packet
 	Data   interface{}
 }
 
-// EventHandler is a function that handles game events
-type EventHandler func(event *Event)
-
-// EventEmitter manages event subscriptions and dispatching
+// EventEmitter handles event dispatching
 type EventEmitter struct {
-	handlers map[EventType][]EventHandler
+	handlers map[EventType][]func(*Event)
 }
 
 // NewEventEmitter creates a new event emitter
 func NewEventEmitter() *EventEmitter {
 	return &EventEmitter{
-		handlers: make(map[EventType][]EventHandler),
+		handlers: make(map[EventType][]func(*Event)),
 	}
 }
 
-// On subscribes to an event type
-func (e *EventEmitter) On(eventType EventType, handler EventHandler) {
+// On registers a handler for an event type
+func (e *EventEmitter) On(eventType EventType, handler func(*Event)) {
+	if _, exists := e.handlers[eventType]; !exists {
+		e.handlers[eventType] = make([]func(*Event), 0)
+	}
 	e.handlers[eventType] = append(e.handlers[eventType], handler)
 }
 
-// Off unsubscribes from an event type
-func (e *EventEmitter) Off(eventType EventType, handler EventHandler) {
-	if handlers, ok := e.handlers[eventType]; ok {
+// Off removes a handler for an event type
+func (e *EventEmitter) Off(eventType EventType, handler func(*Event)) {
+	if handlers, exists := e.handlers[eventType]; exists {
 		for i, h := range handlers {
 			if &h == &handler {
 				e.handlers[eventType] = append(handlers[:i], handlers[i+1:]...)
@@ -67,31 +99,42 @@ func (e *EventEmitter) Off(eventType EventType, handler EventHandler) {
 	}
 }
 
-// Emit dispatches an event to all subscribed handlers
+// Emit dispatches an event to all registered handlers
 func (e *EventEmitter) Emit(event *Event) {
-	if handlers, ok := e.handlers[event.Type]; ok {
+	if handlers, exists := e.handlers[event.Type]; exists {
 		for _, handler := range handlers {
 			handler(event)
 		}
 	}
 }
 
-// PlayerEventData contains data specific to player events
+// Event data structures
 type PlayerEventData struct {
-	PlayerData *packets.PlayerData
-	Position   *packets.WorldPosData
+	PlayerData interface{} // Will be replaced with proper PlayerData type
+	Position   interface{} // Will be replaced with proper Position type
 }
 
-// EnemyEventData contains data specific to enemy events
 type EnemyEventData struct {
-	ObjectID   int32
-	ObjectType int32
-	Position   *packets.WorldPosData
+	Enemy    interface{} // Will be replaced with proper Enemy type
+	Position interface{} // Will be replaced with proper Position type
 }
 
-// ChatEventData contains data specific to chat events
-type ChatEventData struct {
-	Name      string
-	Message   string
-	Recipient string
+type ProjectileEventData struct {
+	OwnerID      int32
+	ProjectileID int32
+	Position     interface{} // Will be replaced with proper Position type
+	Damage       int32
+}
+
+type MapEventData struct {
+	Width  int32
+	Height int32
+	Name   string
+	Seed   int32
+}
+
+type ItemEventData struct {
+	ItemID   int32
+	SlotID   int32
+	Position interface{} // Will be replaced with proper Position type
 }

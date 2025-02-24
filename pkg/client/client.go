@@ -2,7 +2,9 @@ package client
 
 import (
 	"fmt"
+	"io"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 	"gorelay/pkg/crypto"
 	"gorelay/pkg/events"
 	"gorelay/pkg/logger"
+	"gorelay/pkg/models"
 	"gorelay/pkg/packets"
 	"gorelay/pkg/resources"
 )
@@ -17,21 +20,15 @@ import (
 // Client represents a connected RotMG client
 type Client struct {
 	// Connection info
-	conn       net.Conn
-	connected  bool
-	serverAddr string
-	serverPort int
-	mu         sync.Mutex
-	rc4        *crypto.RC4Manager
+	conn      net.Conn
+	connected bool
+	server    *models.Server
+	mu        sync.Mutex
+	rc4       *crypto.RC4Manager
 
 	// Game state
-	objectID    int32
-	worldPos    *packets.WorldPosData
-	playerData  *packets.PlayerData
+	state       *GameState
 	accountInfo *account.Account
-	buildVer    string
-	gameID      int32
-	nextPos     []*packets.WorldPosData
 
 	// Resources
 	resources *resources.ResourceManager
@@ -41,30 +38,48 @@ type Client struct {
 	packetHandler *packets.PacketHandler
 	versionMgr    *packets.VersionManager
 
-	// State tracking
-	lastFrameTime int64
-	projectiles   []*Projectile
-	enemies       map[int32]*Enemy
-	players       map[int32]*Player
+	// Game tracking
+	enemies     map[int32]*Enemy
+	players     map[int32]*Player
+	projectiles map[int32]*Projectile
+	currentMap  *Map
 
 	// Event handling
 	events *events.EventEmitter
+
+	// Connection management
+	reconnectAttempts    int
+	maxReconnectAttempts int
+	reconnectDelay       time.Duration
+	readTimeout          time.Duration
+	writeTimeout         time.Duration
 }
 
 // NewClient creates a new RotMG client instance
 func NewClient(acc *account.Account, res *resources.ResourceManager, log *logger.Logger) *Client {
+	// Get server from account preference or default to USEast
+	server := models.GetServer(acc.ServerPref)
+
 	client := &Client{
 		accountInfo:   acc,
 		resources:     res,
 		logger:        log,
-		serverAddr:    "server.realmofthemadgod.com",
-		serverPort:    2050,
+		server:        server,
 		packetHandler: packets.NewPacketHandler(),
 		versionMgr:    packets.NewVersionManager(),
-		enemies:       make(map[int32]*Enemy),
-		players:       make(map[int32]*Player),
-		nextPos:       make([]*packets.WorldPosData, 0),
-		events:        events.NewEventEmitter(),
+
+		// Initialize game state
+		state:       &GameState{},
+		enemies:     make(map[int32]*Enemy),
+		players:     make(map[int32]*Player),
+		projectiles: make(map[int32]*Projectile),
+		events:      events.NewEventEmitter(),
+
+		// Initialize connection management
+		maxReconnectAttempts: 3,
+		reconnectDelay:       5 * time.Second,
+		readTimeout:          30 * time.Second,
+		writeTimeout:         10 * time.Second,
 	}
 
 	// Register packet handlers
@@ -92,19 +107,40 @@ func (c *Client) Connect() error {
 		return fmt.Errorf("client already connected")
 	}
 
-	addr := fmt.Sprintf("%s:%d", c.serverAddr, c.serverPort)
-	conn, err := net.Dial("tcp", addr)
-	if err != nil {
-		return fmt.Errorf("failed to connect: %v", err)
+	var lastErr error
+	for attempt := 0; attempt <= c.maxReconnectAttempts; attempt++ {
+		if attempt > 0 {
+			c.logger.Info("Client", "Reconnection attempt %d/%d in %v...",
+				attempt, c.maxReconnectAttempts, c.reconnectDelay)
+			time.Sleep(c.reconnectDelay)
+		}
+
+		addr := fmt.Sprintf("%s:%d", c.server.Address, 2050)
+		conn, err := net.Dial("tcp", addr)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to connect: %v", err)
+			continue
+		}
+
+		// Set connection timeouts
+		tcpConn := conn.(*net.TCPConn)
+		tcpConn.SetKeepAlive(true)
+		tcpConn.SetKeepAlivePeriod(60 * time.Second)
+		tcpConn.SetReadBuffer(8192)
+		tcpConn.SetWriteBuffer(8192)
+
+		c.conn = conn
+		c.connected = true
+		c.reconnectAttempts = 0
+
+		// Start packet handling goroutine
+		go c.handlePackets()
+
+		return nil
 	}
 
-	c.conn = conn
-	c.connected = true
-
-	// Start packet handling goroutine
-	go c.handlePackets()
-
-	return nil
+	return fmt.Errorf("failed to connect after %d attempts: %v",
+		c.maxReconnectAttempts, lastErr)
 }
 
 // Disconnect closes the connection to the game server
@@ -128,7 +164,7 @@ func (c *Client) registerPacketHandlers() {
 	c.packetHandler.RegisterHandler(int((&packets.AoePacket{}).ID()), func(data []byte) error {
 		packet := &packets.AoePacket{}
 		// TODO: Implement packet decoding
-		if packet.Pos.SquareDistanceTo(c.worldPos) < packet.Radius*packet.Radius {
+		if packet.Pos.SquareDistanceTo(c.state.WorldPos) < packet.Radius*packet.Radius {
 			// Apply AoE damage
 			c.applyDamage(packet.Damage, packet.ArmorPiercing)
 		}
@@ -152,12 +188,12 @@ func (c *Client) registerPacketHandlers() {
 	c.packetHandler.RegisterHandler(int((&packets.NewTickPacket{}).ID()), func(data []byte) error {
 		packet := &packets.NewTickPacket{}
 		// TODO: Implement packet decoding
-		c.lastFrameTime = time.Now().UnixNano() / int64(time.Millisecond)
+		c.state.LastFrameTime = time.Now().UnixNano() / int64(time.Millisecond)
 
 		// Process updates
 		for _, update := range packet.Updates {
-			if update.ObjectID == c.objectID {
-				c.worldPos = update.Pos
+			if update.ObjectID == c.state.ObjectID {
+				c.state.WorldPos = update.Pos
 				// Update player stats
 				for _, stat := range update.Stats {
 					c.updateStat(stat)
@@ -174,8 +210,8 @@ func (c *Client) registerPacketHandlers() {
 
 		// Process new objects
 		for _, obj := range packet.NewObjects {
-			if obj.Status.ObjectID == c.objectID {
-				c.worldPos = obj.Status.Pos
+			if obj.Status.ObjectID == c.state.ObjectID {
+				c.state.WorldPos = obj.Status.Pos
 				// Update player stats
 				for _, stat := range obj.Status.Stats {
 					c.updateStat(stat)
@@ -201,7 +237,7 @@ func (c *Client) registerPacketHandlers() {
 		// TODO: Implement packet decoding
 
 		// Handle chat messages
-		if packet.Recipient == c.playerData.Name {
+		if packet.Recipient == c.state.PlayerData.Name {
 			c.handlePrivateMessage(packet)
 		} else {
 			c.handleChatMessage(packet)
@@ -216,7 +252,7 @@ func (c *Client) registerPacketHandlers() {
 		switch packet.ErrorID {
 		case packets.IncorrectVersion:
 			c.logger.Info("Client", "Build version out of date. Updating and reconnecting...")
-			c.buildVer = packet.ErrorDescription
+			c.state.BuildVer = packet.ErrorDescription
 			// TODO: Update build version
 		case packets.InvalidTeleportTarget:
 			c.logger.Warning("Client", "Invalid teleport target")
@@ -241,15 +277,15 @@ func (c *Client) registerPacketHandlers() {
 
 		// Send acknowledgment
 		ack := &packets.GotoAckPacket{
-			Time: int32(c.lastFrameTime),
+			Time: int32(c.state.LastFrameTime),
 		}
 		c.send(ack)
 
-		if packet.ObjectID == c.objectID {
-			c.worldPos = packet.Position
+		if packet.ObjectID == c.state.ObjectID {
+			c.state.WorldPos = packet.Position
 			c.emit(events.EventPlayerMove, packet, &events.PlayerEventData{
-				PlayerData: c.playerData,
-				Position:   c.worldPos,
+				PlayerData: c.state.PlayerData,
+				Position:   c.state.WorldPos,
 			})
 		}
 		return nil
@@ -291,18 +327,53 @@ func (c *Client) handleChatMessage(packet *packets.TextPacket) {
 	// TODO: Implement chat message handling
 }
 
+// GetState returns the current game state
+func (c *Client) GetState() *GameState {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.state
+}
+
+// GetEnemy returns an enemy by ID
+func (c *Client) GetEnemy(id int32) *Enemy {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.enemies[id]
+}
+
+// GetPlayer returns a player by ID
+func (c *Client) GetPlayer(id int32) *Player {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.players[id]
+}
+
+// GetProjectile returns a projectile by ID
+func (c *Client) GetProjectile(id int32) *Projectile {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.projectiles[id]
+}
+
+// GetMap returns the current map
+func (c *Client) GetMap() *Map {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.currentMap
+}
+
 // GetPosition returns the client's current position
 func (c *Client) GetPosition() *packets.WorldPosData {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.worldPos
+	return c.state.WorldPos
 }
 
 // SetPosition updates the client's position
 func (c *Client) SetPosition(pos *packets.WorldPosData) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.worldPos = pos
+	c.state.WorldPos = pos
 }
 
 // IsConnected returns whether the client is connected
@@ -323,8 +394,27 @@ func (c *Client) handlePackets() {
 
 	buffer := make([]byte, 8192)
 	for {
+		// Set read deadline for each packet
+		if err := c.conn.SetReadDeadline(time.Now().Add(c.readTimeout)); err != nil {
+			c.logger.Error("Client", "Failed to set read deadline: %v", err)
+			return
+		}
+
 		n, err := c.conn.Read(buffer)
 		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				c.logger.Warning("Client", "Read timeout, attempting to reconnect...")
+				c.reconnect()
+				return
+			}
+
+			if err == io.EOF || strings.Contains(err.Error(), "connection reset by peer") ||
+				strings.Contains(err.Error(), "forcibly closed") {
+				c.logger.Warning("Client", "Connection closed by server, attempting to reconnect...")
+				c.reconnect()
+				return
+			}
+
 			c.logger.Error("Client", "Error reading packet: %v", err)
 			return
 		}
@@ -336,10 +426,36 @@ func (c *Client) handlePackets() {
 	}
 }
 
+func (c *Client) reconnect() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.connected {
+		return
+	}
+
+	c.conn.Close()
+	c.connected = false
+
+	if c.reconnectAttempts < c.maxReconnectAttempts {
+		c.reconnectAttempts++
+		go func() {
+			if err := c.Connect(); err != nil {
+				c.logger.Error("Client", "Failed to reconnect: %v", err)
+			}
+		}()
+	}
+}
+
 // Add send method
 func (c *Client) send(packet packets.Packet) error {
 	if !c.connected {
 		return fmt.Errorf("not connected")
+	}
+
+	// Set write deadline for sending packet
+	if err := c.conn.SetWriteDeadline(time.Now().Add(c.writeTimeout)); err != nil {
+		return fmt.Errorf("failed to set write deadline: %v", err)
 	}
 
 	data, err := packets.Encode(packet)
@@ -353,4 +469,33 @@ func (c *Client) send(packet packets.Packet) error {
 
 	_, err = c.conn.Write(data)
 	return err
+}
+
+// SwitchServer changes the client's server and attempts to connect to it
+func (c *Client) SwitchServer(serverName string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	server := models.GetServer(serverName)
+	if server == nil {
+		return fmt.Errorf("unknown server: %s", serverName)
+	}
+
+	// Update server info
+	c.server = server
+
+	// Disconnect from current server if connected
+	if c.connected {
+		c.Disconnect()
+	}
+
+	// Connect to new server
+	return c.Connect()
+}
+
+// GetCurrentServer returns the current server configuration
+func (c *Client) GetCurrentServer() *models.Server {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.server
 }

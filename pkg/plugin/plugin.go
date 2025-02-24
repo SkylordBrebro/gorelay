@@ -3,46 +3,33 @@ package plugin
 import (
 	"fmt"
 	"plugin"
-	"reflect"
 
 	"gorelay/pkg/client"
+	"gorelay/pkg/models"
 	"gorelay/pkg/packets"
 )
 
-// Plugin defines the interface that all plugins must implement
+// Plugin interface that must be implemented by all plugins
 type Plugin interface {
-	// Initialize is called when the plugin is first loaded
-	Initialize(client *client.Client) error
-
-	// Name returns the name of the plugin
 	Name() string
-
-	// Author returns the author of the plugin
-	Author() string
-
-	// Version returns the plugin version
-	Version() string
-
-	// Description returns the plugin description
-	Description() string
-
-	// OnEnable is called when the plugin is enabled
+	Initialize(client *client.Client) error
 	OnEnable() error
-
-	// OnDisable is called when the plugin is disabled
 	OnDisable() error
 }
 
-// PacketHook represents a method that handles a specific packet type
-type PacketHook struct {
-	Plugin     Plugin
-	Method     reflect.Method
-	PacketType reflect.Type
+// PacketHook represents a packet handler function
+type PacketHook func(packet packets.Packet) error
+
+// PluginInstance represents a loaded plugin
+type PluginInstance struct {
+	Name     string
+	Instance Plugin
+	client   *client.Client
 }
 
-// Manager handles plugin loading and lifecycle
+// Manager handles plugin loading and management
 type Manager struct {
-	plugins     map[string]Plugin
+	plugins     []*PluginInstance
 	client      *client.Client
 	packetHooks map[int32][]PacketHook
 }
@@ -50,154 +37,125 @@ type Manager struct {
 // NewManager creates a new plugin manager
 func NewManager(client *client.Client) *Manager {
 	return &Manager{
-		plugins:     make(map[string]Plugin),
+		plugins:     make([]*PluginInstance, 0),
 		client:      client,
 		packetHooks: make(map[int32][]PacketHook),
 	}
 }
 
-// LoadPlugin loads and initializes a plugin
+// LoadPlugin loads a plugin from the specified path
 func (m *Manager) LoadPlugin(path string) error {
-	// Load the plugin
-	plug, err := plugin.Open(path)
+	p, err := plugin.Open(path)
 	if err != nil {
-		return fmt.Errorf("failed to load plugin: %v", err)
+		return fmt.Errorf("failed to open plugin: %v", err)
 	}
 
-	// Look up the plugin symbol
-	symPlugin, err := plug.Lookup("Plugin")
+	symPlugin, err := p.Lookup("Plugin")
 	if err != nil {
-		return fmt.Errorf("plugin does not export 'Plugin' symbol: %v", err)
+		return fmt.Errorf("plugin does not export 'Plugin': %v", err)
 	}
 
-	// Assert that the symbol is a Plugin
-	p, ok := symPlugin.(Plugin)
+	instance, ok := symPlugin.(Plugin)
 	if !ok {
-		return fmt.Errorf("symbol is not a Plugin")
+		return fmt.Errorf("invalid plugin type")
 	}
 
 	// Initialize the plugin
-	if err := p.Initialize(m.client); err != nil {
+	if err := instance.Initialize(m.client); err != nil {
 		return fmt.Errorf("failed to initialize plugin: %v", err)
 	}
 
-	// Register packet hooks
-	if err := m.registerHooks(p); err != nil {
-		return fmt.Errorf("failed to register hooks: %v", err)
+	plugin := &PluginInstance{
+		Name:     instance.Name(),
+		Instance: instance,
+		client:   m.client,
 	}
 
-	m.plugins[p.Name()] = p
-	return p.OnEnable()
+	m.plugins = append(m.plugins, plugin)
+
+	// Enable the plugin
+	return instance.OnEnable()
 }
 
 // UnloadPlugin disables and unloads a plugin
 func (m *Manager) UnloadPlugin(name string) error {
-	p, exists := m.plugins[name]
-	if !exists {
-		return nil
-	}
+	for i, plugin := range m.plugins {
+		if plugin.Name == name {
+			if err := plugin.Instance.OnDisable(); err != nil {
+				return err
+			}
 
-	if err := p.OnDisable(); err != nil {
-		return err
-	}
-
-	// Unregister packet hooks
-	m.unregisterHooks(p)
-
-	delete(m.plugins, name)
-	return nil
-}
-
-// registerHooks registers all packet hooks for a plugin
-func (m *Manager) registerHooks(p Plugin) error {
-	pType := reflect.TypeOf(p)
-
-	// Iterate through all methods
-	for i := 0; i < pType.NumMethod(); i++ {
-		method := pType.Method(i)
-
-		// Check if method is a packet hook
-		if hook := m.parseHook(p, method); hook != nil {
-			packetID := m.getPacketID(hook.PacketType)
-			m.packetHooks[packetID] = append(m.packetHooks[packetID], *hook)
+			// Remove the plugin from the slice
+			m.plugins = append(m.plugins[:i], m.plugins[i+1:]...)
+			return nil
 		}
 	}
-
 	return nil
 }
 
-// unregisterHooks removes all packet hooks for a plugin
-func (m *Manager) unregisterHooks(p Plugin) {
-	for id, hooks := range m.packetHooks {
-		filtered := make([]PacketHook, 0)
-		for _, hook := range hooks {
-			if hook.Plugin != p {
-				filtered = append(filtered, hook)
+// RegisterPacketHook registers a packet handler for a specific packet type
+func (m *Manager) RegisterPacketHook(packetType int32, hook PacketHook) {
+	if hooks, exists := m.packetHooks[packetType]; exists {
+		m.packetHooks[packetType] = append(hooks, hook)
+	} else {
+		m.packetHooks[packetType] = []PacketHook{hook}
+	}
+}
+
+// UnregisterPacketHook removes a packet handler
+func (m *Manager) UnregisterPacketHook(packetType int32, hook PacketHook) {
+	if hooks, exists := m.packetHooks[packetType]; exists {
+		for i, h := range hooks {
+			if &h == &hook {
+				m.packetHooks[packetType] = append(hooks[:i], hooks[i+1:]...)
+				break
 			}
 		}
-		if len(filtered) > 0 {
-			m.packetHooks[id] = filtered
-		} else {
-			delete(m.packetHooks, id)
+	}
+}
+
+// HandlePacket processes a packet through all registered hooks
+func (m *Manager) HandlePacket(packet packets.Packet) error {
+	if hooks, exists := m.packetHooks[int32(packet.ID())]; exists {
+		for _, hook := range hooks {
+			if err := hook(packet); err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
-// parseHook checks if a method is a packet hook and returns its info
-func (m *Manager) parseHook(p Plugin, method reflect.Method) *PacketHook {
-	mType := method.Type
-
-	// Must have exactly one parameter (besides receiver)
-	if mType.NumIn() != 2 {
-		return nil
-	}
-
-	// Parameter must implement packets.Packet
-	paramType := mType.In(1)
-	if !paramType.Implements(reflect.TypeOf((*packets.Packet)(nil)).Elem()) {
-		return nil
-	}
-
-	return &PacketHook{
-		Plugin:     p,
-		Method:     method,
-		PacketType: paramType,
-	}
+// SwitchServer switches the client to the specified server
+func (m *Manager) SwitchServer(serverName string) error {
+	return m.client.SwitchServer(serverName)
 }
 
-// getPacketID gets the packet ID from a packet type
-func (m *Manager) getPacketID(t reflect.Type) int32 {
-	// Create a new instance of the packet type
-	packet := reflect.New(t.Elem()).Interface().(packets.Packet)
-	return packet.ID()
+// GetCurrentServer returns the current server configuration
+func (m *Manager) GetCurrentServer() *models.Server {
+	return m.client.GetCurrentServer()
 }
 
-// HandlePacket dispatches a packet to all registered hooks
-func (m *Manager) HandlePacket(packet packets.Packet) {
-	hooks, exists := m.packetHooks[packet.ID()]
-	if !exists {
-		return
-	}
-
-	for _, hook := range hooks {
-		// Call the hook method
-		hook.Method.Func.Call([]reflect.Value{
-			reflect.ValueOf(hook.Plugin),
-			reflect.ValueOf(packet),
-		})
-	}
+// GetAvailableServers returns a list of all available servers
+func (m *Manager) GetAvailableServers() models.ServerList {
+	return models.DefaultServers
 }
 
 // GetPlugin returns a loaded plugin by name
 func (m *Manager) GetPlugin(name string) Plugin {
-	return m.plugins[name]
+	for _, plugin := range m.plugins {
+		if plugin.Name == name {
+			return plugin.Instance
+		}
+	}
+	return nil
 }
 
 // GetPlugins returns all loaded plugins
 func (m *Manager) GetPlugins() []Plugin {
 	plugins := make([]Plugin, 0, len(m.plugins))
-	for _, p := range m.plugins {
-		plugins = append(plugins, p)
+	for _, plugin := range m.plugins {
+		plugins = append(plugins, plugin.Instance)
 	}
 	return plugins
 }

@@ -1,5 +1,0 @@
-[05:11:23 | Main] Failed to load resources: failed to read objects file: open Objects.json: The system cannot find the file specified.
-[05:53:24 | Main] Failed to load resources: failed to read objects file: open resources/Objects.json: The system cannot find the path specified.
-[05:54:52 | Main] Failed to load resources: failed to read objects file: open resources/Objects.json: The system cannot find the path specified.
-[05:56:52 | Client] Error reading packet: read tcp 10.0.0.5:65268->172.65.197.123:2050: wsarecv: An existing connection was forcibly closed by the remote host.
-[05:56:58 | Main] Shutting down...
