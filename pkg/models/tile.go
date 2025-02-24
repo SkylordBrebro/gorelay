@@ -26,30 +26,6 @@ const (
 	TerrainSpace
 )
 
-// String returns the string representation of the tile terrain
-func (tt TileTerrain) String() string {
-	switch tt {
-	case TerrainGrass:
-		return "Grass"
-	case TerrainSand:
-		return "Sand"
-	case TerrainStone:
-		return "Stone"
-	case TerrainIce:
-		return "Ice"
-	case TerrainSnow:
-		return "Snow"
-	case TerrainLava:
-		return "Lava"
-	case TerrainWater:
-		return "Water"
-	case TerrainSpace:
-		return "Space"
-	default:
-		return "None"
-	}
-}
-
 // TileProperties represents properties of a tile type
 type TileProperties struct {
 	ID         int32

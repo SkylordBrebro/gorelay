@@ -357,7 +357,74 @@ func (c *Client) addProjectile(bulletType, ownerID, bulletID int32, angle float3
 }
 
 func (c *Client) updateStat(stat packets.StatData) {
-	// TODO: Implement stat updates
+	if c.state.PlayerData == nil {
+		c.state.PlayerData = &packets.PlayerData{
+			Stats:     make(map[string]int32),
+			Inventory: make([]int32, 20), // 12 inventory + 8 backpack slots
+		}
+	}
+
+	switch stat.StatType {
+	case models.MAXHPSTAT:
+		c.state.PlayerData.MaxHP = stat.StatValue
+	case models.HPSTAT:
+		c.state.PlayerData.HP = stat.StatValue
+	case models.MAXMPSTAT:
+		c.state.PlayerData.MaxMP = stat.StatValue
+	case models.MPSTAT:
+		c.state.PlayerData.MP = stat.StatValue
+	case models.NEXTLEVELEXPSTAT:
+		c.state.PlayerData.NextLevelExp = stat.StatValue
+	case models.EXPSTAT:
+		c.state.PlayerData.Exp = stat.StatValue
+	case models.LEVELSTAT:
+		c.state.PlayerData.Level = stat.StatValue
+	case models.NAMESTAT:
+		c.state.PlayerData.Name = stat.StringValue
+	case models.ATTACKSTAT:
+		c.state.PlayerData.Stats["atk"] = stat.StatValue
+	case models.DEFENSESTAT:
+		c.state.PlayerData.Stats["def"] = stat.StatValue
+	case models.SPEEDSTAT:
+		c.state.PlayerData.Stats["spd"] = stat.StatValue
+	case models.DEXTERITYSTAT:
+		c.state.PlayerData.Stats["dex"] = stat.StatValue
+	case models.VITALITYSTAT:
+		c.state.PlayerData.Stats["vit"] = stat.StatValue
+	case models.WISDOMSTAT:
+		c.state.PlayerData.Stats["wis"] = stat.StatValue
+	case models.FAMESTAT:
+		c.state.PlayerData.Fame = stat.StatValue
+	case models.CURRFAMESTAT:
+		c.state.PlayerData.CurrentFame = stat.StatValue
+	case models.NUMSTARSSTAT:
+		c.state.PlayerData.Stars = stat.StatValue
+	case models.ACCOUNTIDSTAT:
+		c.state.PlayerData.AccountID = stat.StringValue
+	case models.GUILDNAMESTAT:
+		c.state.PlayerData.GuildName = stat.StringValue
+	case models.GUILDRANKSTAT:
+		c.state.PlayerData.GuildRank = stat.StatValue
+	case models.HEALTHPOTIONSTACKSTAT:
+		c.state.PlayerData.HPPots = stat.StatValue
+	case models.MAGICPOTIONSTACKSTAT:
+		c.state.PlayerData.MPPots = stat.StatValue
+	case models.HASBACKPACKSTAT:
+		c.state.PlayerData.HasBackpack = stat.StatValue == 1
+	default:
+		// Handle inventory slots
+		if stat.StatType >= models.INVENTORY0STAT && stat.StatType <= models.INVENTORY11STAT {
+			slot := int(stat.StatType - models.INVENTORY0STAT)
+			if slot >= 0 && slot < len(c.state.PlayerData.Inventory) {
+				c.state.PlayerData.Inventory[slot] = stat.StatValue
+			}
+		} else if stat.StatType >= models.BACKPACK0STAT && stat.StatType <= models.BACKPACK7STAT {
+			slot := int(stat.StatType - models.BACKPACK0STAT + 12) // Offset by 12 inventory slots
+			if slot >= 0 && slot < len(c.state.PlayerData.Inventory) {
+				c.state.PlayerData.Inventory[slot] = stat.StatValue
+			}
+		}
+	}
 }
 
 func (c *Client) handleNewObject(obj packets.ObjectData) {
