@@ -10,12 +10,14 @@ type AccountInfo struct {
 // Account represents a game account with its credentials and settings
 type Account struct {
 	Alias      string         `json:"alias"`
+	Email      string         `json:"email"`
 	GUID       string         `json:"guid"`
 	Password   string         `json:"password"`
 	ServerPref string         `json:"serverPref"`
 	CharInfo   *CharacterInfo `json:"charInfo,omitempty"`
 	Proxy      *ProxyConfig   `json:"proxy,omitempty"`
 	Pathfinder bool           `json:"pathfinder,omitempty"`
+	Reconnect  bool           `json:"-"` // Used to signal manual reconnection
 }
 
 // CharacterInfo contains information about an account's characters

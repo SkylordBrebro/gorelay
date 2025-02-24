@@ -15,6 +15,7 @@ type Account struct {
 	Alias      string `json:"alias"`
 	ServerPref string `json:"serverPref"`
 	CharID     int32  `json:"charId"`
+	Reconnect  bool   `json:"-"` // Used to signal manual reconnection
 }
 
 // AccountManager handles loading and managing accounts

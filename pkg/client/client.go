@@ -542,21 +542,59 @@ func (c *Client) reconnect() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// If already disconnected, no need to proceed
 	if !c.connected {
 		return
 	}
 
-	c.conn.Close()
+	// Log reconnection attempt
+	c.logger.Info("Client", "Initiating reconnection sequence...")
+
+	// Properly close existing connection
+	if c.conn != nil {
+		c.conn.Close()
+		c.conn = nil
+	}
 	c.connected = false
 
-	if c.reconnectAttempts < c.maxReconnectAttempts {
-		c.reconnectAttempts++
-		go func() {
-			if err := c.Connect(); err != nil {
-				c.logger.Error("Client", "Failed to reconnect: %v", err)
-			}
-		}()
+	// Reset game state
+	c.state = &GameState{
+		BuildVer: c.state.BuildVer, // Preserve build version
 	}
+	c.enemies = make(map[int32]*Enemy)
+	c.players = make(map[int32]*Player)
+	c.projectiles = make(map[int32]*Projectile)
+
+	// Check if we should attempt reconnection
+	if c.reconnectAttempts >= c.maxReconnectAttempts {
+		c.logger.Error("Client", "Max reconnection attempts (%d) reached", c.maxReconnectAttempts)
+		return
+	}
+
+	c.reconnectAttempts++
+	attemptNum := c.reconnectAttempts
+
+	// Start reconnection attempt in a goroutine
+	go func() {
+		// Wait for the configured delay
+		c.logger.Info("Client", "Waiting %v before reconnection attempt %d/%d...",
+			c.reconnectDelay, attemptNum, c.maxReconnectAttempts)
+		time.Sleep(c.reconnectDelay)
+
+		// Check if this was a manual reconnection request
+		if c.accountInfo != nil && c.accountInfo.Reconnect {
+			c.accountInfo.Reconnect = false // Reset the flag
+			c.reconnectAttempts = 0         // Reset attempts for manual reconnection
+		}
+
+		// Attempt to reconnect
+		if err := c.Connect(); err != nil {
+			c.logger.Error("Client", "Reconnection attempt %d failed: %v", attemptNum, err)
+		} else {
+			c.logger.Info("Client", "Successfully reconnected on attempt %d", attemptNum)
+			c.reconnectAttempts = 0 // Reset counter on successful connection
+		}
+	}()
 }
 
 // Add send method

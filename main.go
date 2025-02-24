@@ -12,6 +12,7 @@ import (
 	"gorelay/pkg/config"
 	"gorelay/pkg/logger"
 	"gorelay/pkg/plugin"
+	"gorelay/pkg/server"
 )
 
 func main() {
@@ -33,6 +34,14 @@ func main() {
 		log.Fatalf("Failed to initialize logger: %v", err)
 	}
 	defer logger.Close()
+
+	// Initialize monitor server
+	monitor := server.NewMonitorServer(8080)
+	if err := monitor.Start(); err != nil {
+		logger.Error("Main", "Failed to start monitor server: %v", err)
+		os.Exit(1)
+	}
+	defer monitor.Stop()
 
 	// Load accounts
 	accManager, err := account.LoadAccounts(*accountsPath)
