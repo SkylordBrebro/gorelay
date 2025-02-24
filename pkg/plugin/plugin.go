@@ -138,7 +138,10 @@ func (m *Manager) GetCurrentServer() *models.Server {
 
 // GetAvailableServers returns a list of all available servers
 func (m *Manager) GetAvailableServers() models.ServerList {
-	return models.DefaultServers
+	if models.CachedServers != nil {
+		return models.CachedServers
+	}
+	return models.ServerList{models.DefaultServer.Name: models.DefaultServer}
 }
 
 // GetPlugin returns a loaded plugin by name

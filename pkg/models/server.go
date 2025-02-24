@@ -1,48 +1,103 @@
 package models
 
+import (
+	"encoding/xml"
+	"fmt"
+	"io"
+	"net/http"
+)
+
 // Server represents a game server that can be connected to
 type Server struct {
-	Name     string  `json:"name"`
+	Name     string  `json:"name" xml:"name"`
 	Address  string  `json:"address"`
+	DNS      string  `json:"dns,omitempty" xml:"dns"`
 	Port     int     `json:"port"`
-	Usage    int32   `json:"usage"`
+	Usage    float32 `json:"usage" xml:"usage"`
 	MaxUsers int32   `json:"maxUsers"`
-	Lat      float32 `json:"lat,omitempty"`
-	Long     float32 `json:"long,omitempty"`
-	DNS      string  `json:"dns,omitempty"`
+	Lat      float32 `json:"lat,omitempty" xml:"lat"`
+	Long     float32 `json:"long,omitempty" xml:"long"`
 }
 
 // ServerList is a map of server names to their configurations
 type ServerList map[string]*Server
 
-// DefaultServers contains the list of available game servers
-var DefaultServers = ServerList{
-	"EUEast":      {Name: "EUEast", Address: "18.184.218.174"},
-	"EUSouthWest": {Name: "EUSouthWest", Address: "35.180.67.120"},
-	"EUNorth":     {Name: "EUNorth", Address: "18.159.133.120"},
-	"USWest4":     {Name: "USWest4", Address: "54.235.235.140"},
-	"EUWest2":     {Name: "EUWest2", Address: "52.16.86.215"},
-	"USSouth3":    {Name: "USSouth3", Address: "52.207.206.31"},
-	"Asia":        {Name: "Asia", Address: "3.0.147.127"},
-	"EUWest":      {Name: "EUWest", Address: "15.237.60.223"},
-	"USMidWest":   {Name: "USMidWest", Address: "18.221.120.59"},
-	"USSouth":     {Name: "USSouth", Address: "3.82.126.16"},
-	"USWest3":     {Name: "USWest3", Address: "18.144.30.153"},
-	"USSouthWest": {Name: "USSouthWest", Address: "54.153.13.68"},
-	"Australia":   {Name: "Australia", Address: "54.79.72.84"},
-	"USWest":      {Name: "USWest", Address: "54.86.47.176"},
-	"USMidWest2":  {Name: "USMidWest2", Address: "3.140.254.133"},
-	"USNorthWest": {Name: "USNorthWest", Address: "34.238.176.119"},
-	"USEast2":     {Name: "USEast2", Address: "54.209.152.223"},
-	"USEast":      {Name: "USEast", Address: "54.234.226.24"},
+// XMLServerList represents the XML response from the server list API
+type XMLServerList struct {
+	XMLName xml.Name    `xml:"servers"`
+	Servers []XMLServer `xml:"server"`
+}
+
+type XMLServer struct {
+	Name  string  `xml:"name"`
+	DNS   string  `xml:"dns"`
+	Lat   float32 `xml:"lat"`
+	Long  float32 `xml:"long"`
+	Usage float32 `xml:"usage"`
+}
+
+// DefaultServer is the fallback server if no others are available
+var DefaultServer = &Server{
+	Name:    "USEast",
+	Address: "54.234.226.24", // Keeping one default IP as absolute fallback
+	Port:    2050,
+}
+
+// CachedServers stores the last fetched server list
+var CachedServers ServerList
+
+// FetchServers retrieves the current server list from the ROTMG API
+func FetchServers(guid string, password string) (ServerList, error) {
+	url := fmt.Sprintf("https://www.realmofthemadgod.com/account/servers?guid=%s&password=%s", guid, password)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch servers: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %v", err)
+	}
+
+	// Parse XML response
+	var xmlList XMLServerList
+	if err := xml.Unmarshal(body, &xmlList); err != nil {
+		return nil, fmt.Errorf("failed to parse server list: %v", err)
+	}
+
+	// Convert to ServerList format
+	servers := make(ServerList)
+	for _, s := range xmlList.Servers {
+		servers[s.Name] = &Server{
+			Name:    s.Name,
+			Address: s.DNS, // Use DNS as the address
+			DNS:     s.DNS,
+			Port:    2050, // Default ROTMG port
+			Usage:   s.Usage,
+			Lat:     s.Lat,
+			Long:    s.Long,
+		}
+	}
+
+	// Cache the servers for future use
+	CachedServers = servers
+	return servers, nil
 }
 
 // GetServer returns a server configuration by name
 func GetServer(name string) *Server {
-	if server, ok := DefaultServers[name]; ok {
-		return server
+	if CachedServers != nil {
+		if server, ok := CachedServers[name]; ok {
+			return server
+		}
+		// If server name not found but we have cached servers, return first available
+		for _, server := range CachedServers {
+			return server
+		}
 	}
-	return DefaultServers["USEast"] // Default to USEast if server not found
+	return DefaultServer // Absolute fallback if no servers available
 }
 
 // ServerList represents a list of available game servers

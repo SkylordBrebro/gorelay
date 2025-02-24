@@ -57,9 +57,45 @@ type Client struct {
 
 // NewClient creates a new RotMG client instance
 func NewClient(acc *account.Account, res *resources.ResourceManager, log *logger.Logger) *Client {
-	// Get server from account preference or default to USEast
-	server := models.GetServer(acc.ServerPref)
+	// Fetch server list using account credentials
+	servers, err := models.FetchServers(acc.Email, acc.Password)
+	if err != nil {
+		log.Warning("Client", "Failed to fetch servers: %v. Using default server.", err)
+		// Use the default server instead of trying to fetch the list
+		server := models.DefaultServer
+		return createClient(acc, res, log, server)
+	}
 
+	// Get server from account preference or pick first available
+	var server *models.Server
+	if pref := acc.ServerPref; pref != "" {
+		if s, ok := servers[pref]; ok {
+			server = s
+		} else {
+			// If preferred server not found, pick first available
+			for _, s := range servers {
+				server = s
+				break
+			}
+		}
+	} else {
+		// If no preference, pick first available
+		for _, s := range servers {
+			server = s
+			break
+		}
+	}
+
+	// If somehow we still don't have a server, use default
+	if server == nil {
+		server = models.DefaultServer
+	}
+
+	return createClient(acc, res, log, server)
+}
+
+// createClient creates a new client instance with the given server
+func createClient(acc *account.Account, res *resources.ResourceManager, log *logger.Logger, server *models.Server) *Client {
 	client := &Client{
 		accountInfo:   acc,
 		resources:     res,
