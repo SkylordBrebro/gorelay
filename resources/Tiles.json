@@ -13,6 +13,30 @@
   },
   {
     "id": 1,
+    "name": "Grass",
+    "noWalk": false,
+    "minDamage": 0,
+    "maxDamage": 0,
+    "speed": 1.0,
+    "sink": false,
+    "push": false,
+    "sinkLevel": 0,
+    "tex": 1
+  },
+  {
+    "id": 2,
+    "name": "Water",
+    "noWalk": false,
+    "minDamage": 0,
+    "maxDamage": 0,
+    "speed": 0.8,
+    "sink": true,
+    "push": false,
+    "sinkLevel": 1,
+    "tex": 2
+  },
+  {
+    "id": 3,
     "name": "Wall",
     "noWalk": true,
     "minDamage": 0,
@@ -21,6 +45,6 @@
     "sink": false,
     "push": false,
     "sinkLevel": 0,
-    "tex": 1
+    "tex": 3
   }
 ] 

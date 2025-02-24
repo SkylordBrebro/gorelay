@@ -1,42 +1,26 @@
 [
   {
-    "id": 256,
-    "type": "Player",
-    "displayName": "Player",
-    "class": "Character",
-    "maxHP": 100,
-    "defense": 0,
+    "id": 1,
+    "type": "Character",
+    "displayName": "Wizard",
+    "class": "Player",
+    "maxHP": 670,
+    "defense": 25,
     "slotTypes": [1, 2, 3, 4],
     "equipment": [],
-    "tex1": 0,
-    "tex2": 0,
+    "tex1": 1,
+    "tex2": 1,
     "size": 1,
     "enemy": false,
     "god": false,
-    "projectiles": []
-  },
-  {
-    "id": 512,
-    "type": "Enemy",
-    "displayName": "Basic Enemy",
-    "class": "Enemy",
-    "maxHP": 100,
-    "defense": 0,
-    "slotTypes": [],
-    "equipment": [],
-    "tex1": 0,
-    "tex2": 0,
-    "size": 1,
-    "enemy": true,
-    "god": false,
     "projectiles": [
       {
-        "id": 0,
-        "type": "Basic Projectile",
-        "speed": 4.0,
-        "minDamage": 10,
-        "maxDamage": 20,
-        "size": 0.5,
+        "id": 1,
+        "type": "Magic",
+        "speed": 5.0,
+        "minDamage": 100,
+        "maxDamage": 200,
+        "size": 1.0,
         "amplitude": 0.0,
         "frequency": 0.0,
         "wavy": false,
@@ -46,5 +30,21 @@
         "passesCover": false
       }
     ]
+  },
+  {
+    "id": 2,
+    "type": "Enemy",
+    "displayName": "Goblin",
+    "class": "Monster",
+    "maxHP": 100,
+    "defense": 5,
+    "slotTypes": [],
+    "equipment": [],
+    "tex1": 2,
+    "tex2": 2,
+    "size": 1,
+    "enemy": true,
+    "god": false,
+    "projectiles": []
   }
 ] 
