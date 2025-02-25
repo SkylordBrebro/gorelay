@@ -56,6 +56,9 @@ func FetchServers(guid string, password string) (ServerList, error) {
 	requestURL := fmt.Sprintf("https://www.realmofthemadgod.com/account/servers?guid=%s&password=%s",
 		encodedGuid, encodedPassword)
 
+	// Log the request URL for debugging (without the password)
+	fmt.Printf("Fetching servers from URL: https://www.realmofthemadgod.com/account/servers?guid=%s&password=REDACTED\n", encodedGuid)
+
 	resp, err := http.Get(requestURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch servers: %v", err)
@@ -67,9 +70,21 @@ func FetchServers(guid string, password string) (ServerList, error) {
 		return nil, fmt.Errorf("failed to read response: %v", err)
 	}
 
+	// Log the response body for debugging
+	fmt.Printf("Response status: %s\n", resp.Status)
+	fmt.Printf("Response body: %s\n", string(body))
+
 	// Parse XML response
 	var xmlList XMLServerList
 	if err := xml.Unmarshal(body, &xmlList); err != nil {
+		// Try to parse as error response
+		var errorResp struct {
+			XMLName xml.Name `xml:"Error"`
+			Message string   `xml:",chardata"`
+		}
+		if xmlErr := xml.Unmarshal(body, &errorResp); xmlErr == nil {
+			return nil, fmt.Errorf("server returned error: %s", errorResp.Message)
+		}
 		return nil, fmt.Errorf("failed to parse server list: %v", err)
 	}
 
