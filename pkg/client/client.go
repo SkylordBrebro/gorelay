@@ -1,6 +1,7 @@
 package client
 
 import (
+	"encoding/binary"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -148,7 +149,7 @@ func createClient(acc *account.Account, cfg *config.Config, log *logger.Logger, 
 		// Initialize game state
 		state: &GameState{
 			WorldPos:      &WorldPosData{X: 0, Y: 0},
-			PlayerData:    &packets.PlayerData{},
+			PlayerData:    &PlayerData{},
 			LastUpdate:    time.Now(),
 			LastFrameTime: time.Now().UnixNano() / int64(time.Millisecond),
 		},
@@ -248,7 +249,7 @@ func (c *Client) Connect() error {
 	if c.state == nil {
 		c.state = &GameState{
 			WorldPos:      &WorldPosData{X: 0, Y: 0},
-			PlayerData:    &packets.PlayerData{},
+			PlayerData:    &PlayerData{},
 			LastUpdate:    time.Now(),
 			LastFrameTime: time.Now().UnixNano() / int64(time.Millisecond),
 		}
@@ -544,13 +545,13 @@ func (c *Client) addProjectile(bulletType, ownerID, bulletID int32, angle float3
 
 func (c *Client) updateStat(statType int32, statValue int32, stringValue string) {
 	if c.state.PlayerData == nil {
-		c.state.PlayerData = &packets.PlayerData{
+		c.state.PlayerData = &PlayerData{
 			Stats:     make(map[string]int32),
 			Inventory: make([]int32, 20), // 12 inventory + 8 backpack slots
 		}
 	}
 
-	switch statType {
+	switch models.StatType(statType) {
 	case models.MAXHPSTAT:
 		c.state.PlayerData.MaxHP = statValue
 	case models.HPSTAT:
@@ -591,21 +592,22 @@ func (c *Client) updateStat(statType int32, statValue int32, stringValue string)
 		c.state.PlayerData.GuildName = stringValue
 	case models.GUILDRANKSTAT:
 		c.state.PlayerData.GuildRank = statValue
-	case models.HEALTHPOTIONSTACKSTAT:
-		c.state.PlayerData.HPPots = statValue
-	case models.MAGICPOTIONSTACKSTAT:
-		c.state.PlayerData.MPPots = statValue
-	case models.HASBACKPACKSTAT:
-		c.state.PlayerData.HasBackpack = statValue == 1
+		/* 	case models.HEALTHPOTIONSTACKSTAT:
+		   		c.state.PlayerData.HPPots = statValue
+		   	case models.MAGICPOTIONSTACKSTAT:
+		   		c.state.PlayerData.MPPots = statValue
+		   	case models.HASBACKPACKSTAT:
+		   		c.state.PlayerData.HasBackpack = statValue == 1 */
 	default:
 		// Handle inventory slots
-		if statType >= models.INVENTORY0STAT && statType <= models.INVENTORY11STAT {
-			slot := int(statType - models.INVENTORY0STAT)
+		statTypeEnum := models.StatType(statType)
+		if statTypeEnum >= models.INVENTORY0STAT && statTypeEnum <= models.INVENTORY11STAT {
+			slot := int(statTypeEnum - models.INVENTORY0STAT)
 			if slot >= 0 && slot < len(c.state.PlayerData.Inventory) {
 				c.state.PlayerData.Inventory[slot] = statValue
 			}
-		} else if statType >= models.BACKPACK0STAT && statType <= models.BACKPACK7STAT {
-			slot := int(statType - models.BACKPACK0STAT + 12) // Offset by 12 inventory slots
+		} else if statTypeEnum >= models.BACKPACK0STAT && statTypeEnum <= models.BACKPACK7STAT {
+			slot := int(statTypeEnum - models.BACKPACK0STAT + 12) // Offset by 12 inventory slots
 			if slot >= 0 && slot < len(c.state.PlayerData.Inventory) {
 				c.state.PlayerData.Inventory[slot] = statValue
 			}
@@ -730,8 +732,20 @@ func (c *Client) handlePackets() {
 
 		// Log packet details before processing
 		if n > 0 {
-			packetID := int(decryptedData[0])
-			c.logger.Debug("Client", "Received packet - ID: %d, Size: %d bytes", packetID, n)
+			// Ensure we have at least 5 bytes (4 for length + 1 for ID)
+			if n < 5 {
+				c.logger.Warning("Client", "Received packet too small: %d bytes", n)
+				continue
+			}
+
+			// Read packet length (first 4 bytes)
+			packetLength := int(binary.BigEndian.Uint32(decryptedData[:4]))
+
+			// Read packet ID (5th byte)
+			packetID := int(decryptedData[4])
+
+			c.logger.Debug("Client", "Received packet - ID: %d, Size: %d bytes, Declared Length: %d",
+				packetID, n, packetLength)
 
 			// Log both encrypted and decrypted data for debugging
 			if len(buffer[:n]) > 0 {
@@ -749,7 +763,7 @@ func (c *Client) handlePackets() {
 				c.logger.Debug("Client", "Full Hello packet data: % x", decryptedData)
 
 				// Try to decode the Hello packet
-				if len(decryptedData) > 1 {
+				if len(decryptedData) > 5 {
 					c.logger.Info("Client", "Hello packet details:")
 					c.logger.Info("Client", "  Build Version: %s", c.state.BuildVer)
 					c.logger.Info("Client", "  Account: %s", c.accountInfo.Alias)
@@ -766,9 +780,14 @@ func (c *Client) handlePackets() {
 		}
 
 		// Process the decrypted packet
-		if err := c.packetHandler.HandlePacket(int(decryptedData[0]), decryptedData[1:n]); err != nil {
-			c.logger.Error("Client", "Error handling packet: %v", err)
-			// Don't return on packet handling errors, continue processing other packets
+		// Skip the first 4 bytes (length) and pass the ID byte and the rest of the data
+		if n >= 5 {
+			if err := c.packetHandler.HandlePacket(int(decryptedData[4]), decryptedData[5:n]); err != nil {
+				c.logger.Error("Client", "Error handling packet: %v", err)
+				// Don't return on packet handling errors, continue processing other packets
+			}
+		} else {
+			c.logger.Warning("Client", "Packet too small to process: %d bytes", n)
 		}
 	}
 }

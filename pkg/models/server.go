@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 )
 
 // Server represents a game server that can be connected to
@@ -24,7 +25,7 @@ type ServerList map[string]*Server
 
 // XMLServerList represents the XML response from the server list API
 type XMLServerList struct {
-	XMLName xml.Name    `xml:"servers"`
+	XMLName xml.Name    `xml:"Servers"`
 	Servers []XMLServer `xml:"server"`
 }
 
@@ -48,9 +49,14 @@ var CachedServers ServerList
 
 // FetchServers retrieves the current server list from the ROTMG API
 func FetchServers(guid string, password string) (ServerList, error) {
-	url := fmt.Sprintf("https://www.realmofthemadgod.com/account/servers?guid=%s&password=%s", guid, password)
+	// URL encode the guid and password parameters
+	encodedGuid := url.QueryEscape(guid)
+	encodedPassword := url.QueryEscape(password)
 
-	resp, err := http.Get(url)
+	requestURL := fmt.Sprintf("https://www.realmofthemadgod.com/account/servers?guid=%s&password=%s",
+		encodedGuid, encodedPassword)
+
+	resp, err := http.Get(requestURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch servers: %v", err)
 	}

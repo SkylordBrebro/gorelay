@@ -27,10 +27,24 @@ func NewRC4Manager(inKey, outKey []byte) (*RC4Manager, error) {
 	}, nil
 }
 
+// Decrypt decrypts the packet data, skipping the first 5 bytes (4 bytes length + 1 byte ID)
 func (m *RC4Manager) Decrypt(data []byte) {
-	m.inbound.XORKeyStream(data, data)
+	// Skip encryption for packets smaller than 5 bytes
+	if len(data) <= 5 {
+		return
+	}
+
+	// Only decrypt the payload (skip the 4-byte length and 1-byte ID)
+	m.inbound.XORKeyStream(data[5:], data[5:])
 }
 
+// Encrypt encrypts the packet data, skipping the first 5 bytes (4 bytes length + 1 byte ID)
 func (m *RC4Manager) Encrypt(data []byte) {
-	m.outbound.XORKeyStream(data, data)
+	// Skip encryption for packets smaller than 5 bytes
+	if len(data) <= 5 {
+		return
+	}
+
+	// Only encrypt the payload (skip the 4-byte length and 1-byte ID)
+	m.outbound.XORKeyStream(data[5:], data[5:])
 }

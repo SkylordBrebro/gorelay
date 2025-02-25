@@ -2,7 +2,7 @@ package main
 
 import (
 	"gorelay/pkg/client"
-	"gorelay/pkg/packets"
+	"gorelay/pkg/packets/server"
 )
 
 // ExamplePlugin is a basic plugin that demonstrates the plugin system
@@ -53,16 +53,16 @@ func (p *ExamplePlugin) OnDisable() error {
 }
 
 // OnMapInfo is called when a MapInfo packet is received
-func (p *ExamplePlugin) OnMapInfo(packet *packets.MapInfoPacket) {
+func (p *ExamplePlugin) OnMapInfo(packet *server.MapInfo) {
 	p.client.GetLogger().Info("HelloWorld", "Hello from map: %s!", packet.Name)
 }
 
 // OnNewTick is called when a NewTick packet is received
-func (p *ExamplePlugin) OnNewTick(packet *packets.NewTickPacket) {
+func (p *ExamplePlugin) OnNewTick(packet *server.NewTick) {
 	// We'll leave this empty to avoid spam
 }
 
 // OnUpdate is called when an Update packet is received
-func (p *ExamplePlugin) OnUpdate(packet *packets.UpdatePacket) {
+func (p *ExamplePlugin) OnUpdate(packet *server.Update) {
 	// We'll leave this empty to avoid spam
 }

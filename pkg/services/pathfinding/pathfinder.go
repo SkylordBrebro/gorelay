@@ -2,7 +2,7 @@ package pathfinding
 
 import (
 	"container/heap"
-	"gorelay/pkg/packets"
+	"gorelay/pkg/client"
 	"math"
 )
 
@@ -209,7 +209,7 @@ func GridToWorld(gridX, gridY int) (float32, float32) {
 }
 
 // FindPathWorld finds a path between world positions and returns world coordinates
-func (p *Pathfinder) FindPathWorld(startPos, endPos *packets.WorldPosData) []*packets.WorldPosData {
+func (p *Pathfinder) FindPathWorld(startPos, endPos *client.WorldPosData) []*client.WorldPosData {
 	// Convert world to grid coordinates
 	startX, startY := WorldToGrid(startPos.X, startPos.Y)
 	endX, endY := WorldToGrid(endPos.X, endPos.Y)
@@ -221,10 +221,10 @@ func (p *Pathfinder) FindPathWorld(startPos, endPos *packets.WorldPosData) []*pa
 	}
 
 	// Convert back to world coordinates
-	worldPath := make([]*packets.WorldPosData, len(nodePath))
+	worldPath := make([]*client.WorldPosData, len(nodePath))
 	for i, node := range nodePath {
 		worldX, worldY := GridToWorld(node.X, node.Y)
-		worldPath[i] = &packets.WorldPosData{X: worldX, Y: worldY}
+		worldPath[i] = &client.WorldPosData{X: worldX, Y: worldY}
 	}
 
 	return worldPath
