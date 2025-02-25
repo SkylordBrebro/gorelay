@@ -692,7 +692,6 @@ func (c *Client) GetLogger() *logger.Logger {
 func (c *Client) handlePackets() {
 	defer c.Disconnect()
 
-	//buffer := make([]byte, 8192)
 	for {
 		// Set read deadline for each packet
 		if err := c.conn.SetReadDeadline(time.Now().Add(c.readTimeout)); err != nil {
@@ -725,7 +724,8 @@ func (c *Client) handlePackets() {
 		packetID := header[4]
 
 		// Validate packet length
-		if packetLength <= 5 || packetLength > 8192 {
+		//todo: dynamically adjust buffer size if too big
+		if packetLength <= 5 || packetLength > 100000 {
 			c.logger.Error("Client", "Invalid packet length: %d", packetLength)
 			continue
 		}
@@ -749,46 +749,29 @@ func (c *Client) handlePackets() {
 			c.logger.Warning("Client", "RC4 not initialized, processing raw data")
 		}
 
-		// Log packet details before processing
-		if n > 0 {
-			// Ensure we have at least 5 bytes (4 for length + 1 for ID)
-			if n < 5 {
-				c.logger.Warning("Client", "Received packet too small: %d bytes", n)
-				continue
+		// Log packet details
+		c.logger.Debug("Client", "Received packet - ID: %d, Length: %d bytes", packetID, packetLength)
+		if payloadLength > 0 {
+			maxBytes := 16
+			if payloadLength < maxBytes {
+				maxBytes = payloadLength
 			}
-
-			// Read packet length (first 4 bytes)
-			packetLength := int(binary.BigEndian.Uint32(decryptedData[:4]))
-
-			// Read packet ID (5th byte)
-			packetID := int(decryptedData[4])
-
-			c.logger.Debug("Client", "Received packet - ID: %d, Size: %d bytes, Declared Length: %d",
-				packetID, n, packetLength)
-
-			// Log both encrypted and decrypted data for debugging
-			if len(buffer[:n]) > 0 {
-				maxBytes := 16
-				if len(buffer[:n]) < maxBytes {
-					maxBytes = len(buffer[:n])
-				}
-				c.logger.Debug("Client", "Encrypted data (first %d bytes): % x", maxBytes, buffer[:maxBytes])
-				c.logger.Debug("Client", "Decrypted data (first %d bytes): % x", maxBytes, decryptedData[:maxBytes])
-			}
+			c.logger.Debug("Client", "Encrypted payload (first %d bytes): % x", maxBytes, payload[:maxBytes])
+			c.logger.Debug("Client", "Decrypted payload (first %d bytes): % x", maxBytes, decryptedPayload[:maxBytes])
+		}
 
 		// Special handling for Hello packet (ID 0)
 		if packetID == 0 {
 			c.logger.Info("Client", "Received Hello packet response")
 			c.logger.Debug("Client", "Full Hello packet payload: % x", decryptedPayload)
 
-				// Try to decode the Hello packet
-				if len(decryptedData) > 5 {
-					c.logger.Info("Client", "Hello packet details:")
-					c.logger.Info("Client", "  Build Version: %s", c.state.BuildVer)
-					c.logger.Info("Client", "  Account: %s", c.accountInfo.Alias)
-					c.logger.Info("Client", "  Connected to: %s", c.server.Name)
-				}
+			if len(decryptedPayload) > 0 {
+				c.logger.Info("Client", "Hello packet details:")
+				c.logger.Info("Client", "  Build Version: %s", c.state.BuildVer)
+				c.logger.Info("Client", "  Account: %s", c.accountInfo.Alias)
+				c.logger.Info("Client", "  Connected to: %s", c.server.Name)
 			}
+		}
 
 		// If we have a version manager, try to get the packet name
 		if c.versionMgr != nil {
@@ -798,14 +781,9 @@ func (c *Client) handlePackets() {
 		}
 
 		// Process the decrypted packet
-		// Skip the first 4 bytes (length) and pass the ID byte and the rest of the data
-		if n >= 5 {
-			if err := c.packetHandler.HandlePacket(int(decryptedData[4]), decryptedData[5:n]); err != nil {
-				c.logger.Error("Client", "Error handling packet: %v", err)
-				// Don't return on packet handling errors, continue processing other packets
-			}
-		} else {
-			c.logger.Warning("Client", "Packet too small to process: %d bytes", n)
+		if err := c.packetHandler.HandlePacket(int(packetID), decryptedPayload); err != nil {
+			c.logger.Error("Client", "Error handling packet: %v", err)
+			// Don't return on packet handling errors, continue processing other packets
 		}
 	}
 }
