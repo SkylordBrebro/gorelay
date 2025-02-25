@@ -692,7 +692,7 @@ func (c *Client) GetLogger() *logger.Logger {
 func (c *Client) handlePackets() {
 	defer c.Disconnect()
 
-	buffer := make([]byte, 8192)
+	//buffer := make([]byte, 8192)
 	for {
 		// Set read deadline for each packet
 		if err := c.conn.SetReadDeadline(time.Now().Add(c.readTimeout)); err != nil {
@@ -700,8 +700,9 @@ func (c *Client) handlePackets() {
 			return
 		}
 
-		n, err := c.conn.Read(buffer)
-		if err != nil {
+		// First read the packet length (4 bytes) and packet ID (1 byte)
+		header := make([]byte, 5)
+		if _, err := io.ReadFull(c.conn, header); err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				c.logger.Warning("Client", "Read timeout, attempting to reconnect...")
 				c.reconnect()
@@ -715,17 +716,35 @@ func (c *Client) handlePackets() {
 				return
 			}
 
-			c.logger.Error("Client", "Error reading packet: %v", err)
+			c.logger.Error("Client", "Error reading packet header: %v", err)
 			return
 		}
 
-		// Make a copy of the data for decryption
-		decryptedData := make([]byte, n)
-		copy(decryptedData, buffer[:n])
+		// Extract packet length and ID
+		packetLength := int(binary.BigEndian.Uint32(header[:4]))
+		packetID := header[4]
 
-		// Decrypt the data if RC4 is initialized
+		// Validate packet length
+		if packetLength <= 5 || packetLength > 8192 {
+			c.logger.Error("Client", "Invalid packet length: %d", packetLength)
+			continue
+		}
+
+		// Read the rest of the packet
+		payloadLength := packetLength - 5
+		payload := make([]byte, payloadLength)
+		if _, err := io.ReadFull(c.conn, payload); err != nil {
+			c.logger.Error("Client", "Error reading packet payload: %v", err)
+			return
+		}
+
+		// Make a copy of the payload for decryption
+		decryptedPayload := make([]byte, payloadLength)
+		copy(decryptedPayload, payload)
+
+		// Decrypt only the payload if RC4 is initialized
 		if c.rc4 != nil {
-			c.rc4.Decrypt(decryptedData)
+			c.rc4.Decrypt(decryptedPayload)
 		} else {
 			c.logger.Warning("Client", "RC4 not initialized, processing raw data")
 		}
@@ -757,10 +776,10 @@ func (c *Client) handlePackets() {
 				c.logger.Debug("Client", "Decrypted data (first %d bytes): % x", maxBytes, decryptedData[:maxBytes])
 			}
 
-			// Special handling for Hello packet (ID 0)
-			if packetID == 0 {
-				c.logger.Info("Client", "Received Hello packet response")
-				c.logger.Debug("Client", "Full Hello packet data: % x", decryptedData)
+		// Special handling for Hello packet (ID 0)
+		if packetID == 0 {
+			c.logger.Info("Client", "Received Hello packet response")
+			c.logger.Debug("Client", "Full Hello packet payload: % x", decryptedPayload)
 
 				// Try to decode the Hello packet
 				if len(decryptedData) > 5 {
@@ -771,11 +790,10 @@ func (c *Client) handlePackets() {
 				}
 			}
 
-			// If we have a version manager, try to get the packet name
-			if c.versionMgr != nil {
-				if packetName, err := c.versionMgr.GetPacketName(packetID); err == nil {
-					c.logger.Debug("Client", "Packet type: %s", packetName)
-				}
+		// If we have a version manager, try to get the packet name
+		if c.versionMgr != nil {
+			if packetName, err := c.versionMgr.GetPacketName(int(packetID)); err == nil {
+				c.logger.Debug("Client", "Packet type: %s", packetName)
 			}
 		}
 
@@ -1122,7 +1140,7 @@ func (c *Client) fetchUnityBuildVersion() (string, error) {
 	data.Set("game_net", "Unity")
 	data.Set("play_platform", "Unity")
 	data.Set("game_net_user_id", "")
-
+ 
 	// Create request
 	req, err := http.NewRequest("POST", baseURL, strings.NewReader(data.Encode()))
 	if err != nil {
