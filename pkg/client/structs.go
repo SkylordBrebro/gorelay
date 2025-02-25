@@ -246,13 +246,17 @@ type PlayerData struct {
 	GuildRank int32
 
 	// Inventory and consumables
-	Inventory   []int32
-	HPPots      int32
-	MPPots      int32
-	HasBackpack bool
+	BackpackSlots int32
+	Inventory     []int32
+	Potions       []PotionData
 
 	// Character stats
 	Stats map[string]int32
+}
+
+type PotionData struct {
+	id       int32
+	quantity int8
 }
 
 // IsDead returns whether the enemy is dead

@@ -1,6 +1,7 @@
 package client
 
 import (
+	"encoding/binary"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -148,7 +149,7 @@ func createClient(acc *account.Account, cfg *config.Config, log *logger.Logger, 
 		// Initialize game state
 		state: &GameState{
 			WorldPos:      &WorldPosData{X: 0, Y: 0},
-			PlayerData:    &packets.PlayerData{},
+			PlayerData:    &PlayerData{},
 			LastUpdate:    time.Now(),
 			LastFrameTime: time.Now().UnixNano() / int64(time.Millisecond),
 		},
@@ -248,7 +249,7 @@ func (c *Client) Connect() error {
 	if c.state == nil {
 		c.state = &GameState{
 			WorldPos:      &WorldPosData{X: 0, Y: 0},
-			PlayerData:    &packets.PlayerData{},
+			PlayerData:    &PlayerData{},
 			LastUpdate:    time.Now(),
 			LastFrameTime: time.Now().UnixNano() / int64(time.Millisecond),
 		}
@@ -544,13 +545,13 @@ func (c *Client) addProjectile(bulletType, ownerID, bulletID int32, angle float3
 
 func (c *Client) updateStat(statType int32, statValue int32, stringValue string) {
 	if c.state.PlayerData == nil {
-		c.state.PlayerData = &packets.PlayerData{
+		c.state.PlayerData = &PlayerData{
 			Stats:     make(map[string]int32),
 			Inventory: make([]int32, 20), // 12 inventory + 8 backpack slots
 		}
 	}
 
-	switch statType {
+	switch models.StatType(statType) {
 	case models.MAXHPSTAT:
 		c.state.PlayerData.MaxHP = statValue
 	case models.HPSTAT:
@@ -592,20 +593,21 @@ func (c *Client) updateStat(statType int32, statValue int32, stringValue string)
 	case models.GUILDRANKSTAT:
 		c.state.PlayerData.GuildRank = statValue
 	case models.HEALTHPOTIONSTACKSTAT:
-		c.state.PlayerData.HPPots = statValue
+	    c.state.PlayerData.HPPots = statValue
 	case models.MAGICPOTIONSTACKSTAT:
-		c.state.PlayerData.MPPots = statValue
+	    c.state.PlayerData.MPPots = statValue
 	case models.HASBACKPACKSTAT:
-		c.state.PlayerData.HasBackpack = statValue == 1
+	    c.state.PlayerData.HasBackpack = statValue == 1
 	default:
 		// Handle inventory slots
-		if statType >= models.INVENTORY0STAT && statType <= models.INVENTORY11STAT {
-			slot := int(statType - models.INVENTORY0STAT)
+		statTypeEnum := models.StatType(statType)
+		if statTypeEnum >= models.INVENTORY0STAT && statTypeEnum <= models.INVENTORY11STAT {
+			slot := int(statTypeEnum - models.INVENTORY0STAT)
 			if slot >= 0 && slot < len(c.state.PlayerData.Inventory) {
 				c.state.PlayerData.Inventory[slot] = statValue
 			}
-		} else if statType >= models.BACKPACK0STAT && statType <= models.BACKPACK7STAT {
-			slot := int(statType - models.BACKPACK0STAT + 12) // Offset by 12 inventory slots
+		} else if statTypeEnum >= models.BACKPACK0STAT && statTypeEnum <= models.BACKPACK7STAT {
+			slot := int(statTypeEnum - models.BACKPACK0STAT + 12) // Offset by 12 inventory slots
 			if slot >= 0 && slot < len(c.state.PlayerData.Inventory) {
 				c.state.PlayerData.Inventory[slot] = statValue
 			}
@@ -690,7 +692,7 @@ func (c *Client) GetLogger() *logger.Logger {
 func (c *Client) handlePackets() {
 	defer c.Disconnect()
 
-	buffer := make([]byte, 8192)
+	//buffer := make([]byte, 8192)
 	for {
 		// Set read deadline for each packet
 		if err := c.conn.SetReadDeadline(time.Now().Add(c.readTimeout)); err != nil {
@@ -698,8 +700,9 @@ func (c *Client) handlePackets() {
 			return
 		}
 
-		n, err := c.conn.Read(buffer)
-		if err != nil {
+		// First read the packet length (4 bytes) and packet ID (1 byte)
+		header := make([]byte, 5)
+		if _, err := io.ReadFull(c.conn, header); err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				c.logger.Warning("Client", "Read timeout, attempting to reconnect...")
 				c.reconnect()
@@ -713,55 +716,67 @@ func (c *Client) handlePackets() {
 				return
 			}
 
-			c.logger.Error("Client", "Error reading packet: %v", err)
+			c.logger.Error("Client", "Error reading packet header: %v", err)
 			return
 		}
 
-		// Make a copy of the data for decryption
-		decryptedData := make([]byte, n)
-		copy(decryptedData, buffer[:n])
+		// Extract packet length and ID
+		packetLength := int(binary.BigEndian.Uint32(header[:4]))
+		packetID := header[4]
 
-		// Decrypt the data if RC4 is initialized
+		// Validate packet length
+		if packetLength <= 5 || packetLength > 8192 {
+			c.logger.Error("Client", "Invalid packet length: %d", packetLength)
+			continue
+		}
+
+		// Read the rest of the packet
+		payloadLength := packetLength - 5
+		payload := make([]byte, payloadLength)
+		if _, err := io.ReadFull(c.conn, payload); err != nil {
+			c.logger.Error("Client", "Error reading packet payload: %v", err)
+			return
+		}
+
+		// Make a copy of the payload for decryption
+		decryptedPayload := make([]byte, payloadLength)
+		copy(decryptedPayload, payload)
+
+		// Decrypt only the payload if RC4 is initialized
 		if c.rc4 != nil {
-			c.rc4.Decrypt(decryptedData)
+			c.rc4.Decrypt(decryptedPayload)
 		} else {
 			c.logger.Warning("Client", "RC4 not initialized, processing raw data")
 		}
 
-		// Log packet details before processing
-		if n > 0 {
-			packetID := int(decryptedData[0])
-			c.logger.Debug("Client", "Received packet - ID: %d, Size: %d bytes", packetID, n)
-
-			// Log both encrypted and decrypted data for debugging
-			if len(buffer[:n]) > 0 {
-				maxBytes := 16
-				if len(buffer[:n]) < maxBytes {
-					maxBytes = len(buffer[:n])
-				}
-				c.logger.Debug("Client", "Encrypted data (first %d bytes): % x", maxBytes, buffer[:maxBytes])
-				c.logger.Debug("Client", "Decrypted data (first %d bytes): % x", maxBytes, decryptedData[:maxBytes])
+		// Log packet details
+		c.logger.Debug("Client", "Received packet - ID: %d, Length: %d bytes", packetID, packetLength)
+		if payloadLength > 0 {
+			maxBytes := 16
+			if payloadLength < maxBytes {
+				maxBytes = payloadLength
 			}
+			c.logger.Debug("Client", "Encrypted payload (first %d bytes): % x", maxBytes, payload[:maxBytes])
+			c.logger.Debug("Client", "Decrypted payload (first %d bytes): % x", maxBytes, decryptedPayload[:maxBytes])
+		}
 
-			// Special handling for Hello packet (ID 0)
-			if packetID == 0 {
-				c.logger.Info("Client", "Received Hello packet response")
-				c.logger.Debug("Client", "Full Hello packet data: % x", decryptedData)
+		// Special handling for Hello packet (ID 0)
+		if packetID == 0 {
+			c.logger.Info("Client", "Received Hello packet response")
+			c.logger.Debug("Client", "Full Hello packet payload: % x", decryptedPayload)
 
-				// Try to decode the Hello packet
-				if len(decryptedData) > 1 {
-					c.logger.Info("Client", "Hello packet details:")
-					c.logger.Info("Client", "  Build Version: %s", c.state.BuildVer)
-					c.logger.Info("Client", "  Account: %s", c.accountInfo.Alias)
-					c.logger.Info("Client", "  Connected to: %s", c.server.Name)
-				}
+			if len(decryptedPayload) > 0 {
+				c.logger.Info("Client", "Hello packet details:")
+				c.logger.Info("Client", "  Build Version: %s", c.state.BuildVer)
+				c.logger.Info("Client", "  Account: %s", c.accountInfo.Alias)
+				c.logger.Info("Client", "  Connected to: %s", c.server.Name)
 			}
+		}
 
-			// If we have a version manager, try to get the packet name
-			if c.versionMgr != nil {
-				if packetName, err := c.versionMgr.GetPacketName(packetID); err == nil {
-					c.logger.Debug("Client", "Packet type: %s", packetName)
-				}
+		// If we have a version manager, try to get the packet name
+		if c.versionMgr != nil {
+			if packetName, err := c.versionMgr.GetPacketName(int(packetID)); err == nil {
+				c.logger.Debug("Client", "Packet type: %s", packetName)
 			}
 		}
 
@@ -1103,7 +1118,7 @@ func (c *Client) fetchUnityBuildVersion() (string, error) {
 	data.Set("game_net", "Unity")
 	data.Set("play_platform", "Unity")
 	data.Set("game_net_user_id", "")
-
+ 
 	// Create request
 	req, err := http.NewRequest("POST", baseURL, strings.NewReader(data.Encode()))
 	if err != nil {
