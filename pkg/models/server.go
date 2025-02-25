@@ -26,15 +26,15 @@ type ServerList map[string]*Server
 // XMLServerList represents the XML response from the server list API
 type XMLServerList struct {
 	XMLName xml.Name    `xml:"Servers"`
-	Servers []XMLServer `xml:"server"`
+	Servers []XMLServer `xml:"Server"`
 }
 
 type XMLServer struct {
-	Name  string  `xml:"name"`
-	DNS   string  `xml:"dns"`
-	Lat   float32 `xml:"lat"`
-	Long  float32 `xml:"long"`
-	Usage float32 `xml:"usage"`
+	Name  string  `xml:"Name"`
+	DNS   string  `xml:"DNS"`
+	Lat   float32 `xml:"Lat"`
+	Long  float32 `xml:"Long"`
+	Usage float32 `xml:"Usage"`
 }
 
 // DefaultServer is the fallback server if no others are available
@@ -49,6 +49,14 @@ var CachedServers ServerList
 
 // FetchServers retrieves the current server list from the ROTMG API
 func FetchServers(guid string, password string) (ServerList, error) {
+	// Check for empty credentials
+	if guid == "" {
+		return nil, fmt.Errorf("empty email/guid provided")
+	}
+	if password == "" {
+		return nil, fmt.Errorf("empty password provided")
+	}
+
 	// URL encode the guid and password parameters
 	encodedGuid := url.QueryEscape(guid)
 	encodedPassword := url.QueryEscape(password)
@@ -59,7 +67,18 @@ func FetchServers(guid string, password string) (ServerList, error) {
 	// Log the request URL for debugging (without the password)
 	fmt.Printf("Fetching servers from URL: https://www.realmofthemadgod.com/account/servers?guid=%s&password=REDACTED\n", encodedGuid)
 
-	resp, err := http.Get(requestURL)
+	// Create a custom HTTP client with appropriate headers
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", requestURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	// Add user agent and other headers that might be required
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+	req.Header.Set("Accept", "application/xml, text/xml, */*")
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch servers: %v", err)
 	}
@@ -73,6 +92,12 @@ func FetchServers(guid string, password string) (ServerList, error) {
 	// Log the response body for debugging
 	fmt.Printf("Response status: %s\n", resp.Status)
 	fmt.Printf("Response body: %s\n", string(body))
+
+	// Check for common error responses
+	responseStr := string(body)
+	if responseStr == "<Error>Error.incorrectEmailOrPassword</Error>" {
+		return nil, fmt.Errorf("authentication failed: incorrect email/guid or password")
+	}
 
 	// Parse XML response
 	var xmlList XMLServerList

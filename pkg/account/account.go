@@ -202,6 +202,18 @@ func LoadAccounts(path string) (*AccountManager, error) {
 		return nil, fmt.Errorf("failed to parse accounts file: %v", err)
 	}
 
+	// Synchronize Email and GUID fields for each account
+	for _, acc := range accounts.Accounts {
+		// If Email is empty but GUID is set, use GUID as Email
+		if acc.Email == "" && acc.GUID != "" {
+			acc.Email = acc.GUID
+		}
+		// If GUID is empty but Email is set, use Email as GUID
+		if acc.GUID == "" && acc.Email != "" {
+			acc.GUID = acc.Email
+		}
+	}
+
 	return &accounts, nil
 }
 

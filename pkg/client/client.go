@@ -2,13 +2,10 @@ package client
 
 import (
 	"encoding/binary"
-	"encoding/xml"
 	"fmt"
 	"io"
 	"math"
 	"net"
-	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -106,24 +103,36 @@ func NewClient(acc *account.Account, cfg *config.Config, log *logger.Logger) *Cl
 			server = s
 		} else {
 			// If preferred server not found, pick first available
+			foundServer := false
 			for _, s := range servers {
 				server = s
+				foundServer = true
 				break
 			}
-			log.Warning("Client", "Preferred server %s not found. Using %s instead.", pref, server.Name)
+
+			if foundServer {
+				log.Warning("Client", "Preferred server %s not found. Using %s instead.", pref, server.Name)
+			} else {
+				// No servers available in the map, use default
+				server = models.DefaultServer
+				log.Warning("Client", "Preferred server %s not found and no servers available. Using default server %s.",
+					pref, server.Name)
+			}
 		}
 	} else {
 		// If no preference, pick first available
+		foundServer := false
 		for _, s := range servers {
 			server = s
+			foundServer = true
 			break
 		}
-	}
 
-	// If somehow we still don't have a server, use default
-	if server == nil {
-		server = models.DefaultServer
-		log.Warning("Client", "No servers available. Using default server.")
+		if !foundServer {
+			// No servers available in the map, use default
+			server = models.DefaultServer
+			log.Warning("Client", "No servers available. Using default server %s.", server.Name)
+		}
 	}
 
 	client := createClient(acc, cfg, log, server)
@@ -1106,71 +1115,77 @@ func (p *packetWrapper) Type() interfaces.PacketType {
 
 // Add new function to fetch Unity build version
 func (c *Client) fetchUnityBuildVersion() (string, error) {
-	baseURL := "https://www.realmofthemadgod.com/app/init"
+	// Hardcoded build version as requested
+	return "5.7.0.0.0", nil
 
-	// Create HTTP client with appropriate headers
-	client := &http.Client{}
+	// Original implementation commented out below
+	/*
+		baseURL := "https://www.realmofthemadgod.com/app/init"
 
-	// Prepare form data
-	data := make(url.Values)
-	data.Set("platform", "standalonewindows64")
-	data.Set("key", "9KnJFxtTvLu2frXv")
-	data.Set("game_net", "Unity")
-	data.Set("play_platform", "Unity")
-	data.Set("game_net_user_id", "")
- 
-	// Create request
-	req, err := http.NewRequest("POST", baseURL, strings.NewReader(data.Encode()))
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %v", err)
-	}
+		// Create HTTP client with appropriate headers
+		client := &http.Client{}
 
-	// Set Unity-specific headers
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("X-Unity-Version", "2021.3.16f1")
-	req.Header.Set("User-Agent", "UnityPlayer/2021.3.16f1 (UnityWebRequest/1.0, libcurl/7.84.0-DEV)")
+		// Prepare form data
+		data := make(url.Values)
+		data.Set("platform", "standalonewindows64")
+		data.Set("key", "9KnJFxtTvLu2frXv")
+		data.Set("game_net", "Unity")
+		data.Set("play_platform", "Unity")
+		data.Set("game_net_user_id", "")
 
-	// Send request
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to send request: %v", err)
-	}
-	defer resp.Body.Close()
+		// Create request
+		req, err := http.NewRequest("POST", baseURL, strings.NewReader(data.Encode()))
+		if err != nil {
+			return "", fmt.Errorf("failed to create request: %v", err)
+		}
 
-	// Check response status
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("server returned status %d: %s", resp.StatusCode, string(body))
-	}
+		// Set Unity-specific headers
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("X-Unity-Version", "2021.3.16f1")
+		req.Header.Set("User-Agent", "UnityPlayer/2021.3.16f1 (UnityWebRequest/1.0, libcurl/7.84.0-DEV)")
 
-	// Read response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %v", err)
-	}
+		// Send request
+		resp, err := client.Do(req)
+		if err != nil {
+			return "", fmt.Errorf("failed to send request: %v", err)
+		}
+		defer resp.Body.Close()
 
-	// Log response for debugging
-	c.logger.Debug("Client", "Init response: %s", string(body))
+		// Check response status
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			return "", fmt.Errorf("server returned status %d: %s", resp.StatusCode, string(body))
+		}
 
-	// Parse XML response
-	doc := &struct {
-		XMLName      xml.Name `xml:"AppSettings"`
-		BuildHash    string   `xml:"BuildHash"`
-		BuildCDN     string   `xml:"BuildCDN"`
-		BuildVersion string   `xml:"BuildVersion"`
-	}{}
+		// Read response
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return "", fmt.Errorf("failed to read response: %v", err)
+		}
 
-	if err := xml.Unmarshal(body, doc); err != nil {
-		return "", fmt.Errorf("failed to parse XML response: %v", err)
-	}
+		// Log response for debugging
+		c.logger.Debug("Client", "Init response: %s", string(body))
 
-	// Return BuildVersion if available, otherwise use BuildHash
-	if doc.BuildVersion != "" {
-		return doc.BuildVersion, nil
-	}
-	if doc.BuildHash != "" {
-		return doc.BuildHash, nil
-	}
+		// Parse XML response
+		doc := &struct {
+			XMLName      xml.Name `xml:"AppSettings"`
+			BuildHash    string   `xml:"BuildHash"`
+			BuildCDN     string   `xml:"BuildCDN"`
+			BuildVersion string   `xml:"BuildVersion"`
+		}{}
 
-	return "", fmt.Errorf("neither BuildVersion nor BuildHash found in response")
+		if err := xml.Unmarshal(body, doc); err != nil {
+			return "", fmt.Errorf("failed to parse XML response: %v", err)
+		}
+
+		// Return BuildVersion if available, otherwise use BuildHash
+		if doc.BuildVersion != "" {
+			return doc.BuildVersion, nil
+		}
+		if doc.BuildHash != "" {
+			return doc.BuildHash, nil
+		}
+
+		return "", fmt.Errorf("neither BuildVersion nor BuildHash found in response")
+	*/
 }
