@@ -13,6 +13,7 @@ import (
 	"gorelay/pkg/client"
 	"gorelay/pkg/config"
 	"gorelay/pkg/logger"
+	"gorelay/pkg/models"
 	"gorelay/pkg/plugin"
 	"gorelay/pkg/server"
 )
@@ -51,6 +52,13 @@ func main() {
 		logger.Error("Main", "Failed to load accounts: %v", err)
 		os.Exit(1)
 	}
+
+	// Initialize account aliases for the monitor server
+	aliases := make([]string, len(accManager.Accounts))
+	for i, acc := range accManager.Accounts {
+		aliases[i] = acc.Alias
+	}
+	models.SetAccountAliases(aliases)
 
 	// Create wait group for managing client goroutines
 	var wg sync.WaitGroup

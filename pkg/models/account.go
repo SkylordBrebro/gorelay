@@ -51,3 +51,16 @@ type AccountInUseError struct {
 func (e *AccountInUseError) Error() string {
 	return "Account " + e.Account.Alias + " is already in use on server " + e.Server
 }
+
+// Global variable to store account aliases
+var accountAliases []string
+
+// GetAllAccountAliases returns a slice of all account aliases
+func GetAllAccountAliases() []string {
+	return accountAliases
+}
+
+// SetAccountAliases sets the list of account aliases
+func SetAccountAliases(aliases []string) {
+	accountAliases = aliases
+}

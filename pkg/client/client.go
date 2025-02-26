@@ -1116,7 +1116,7 @@ func (p *packetWrapper) Type() interfaces.PacketType {
 // Add new function to fetch Unity build version
 func (c *Client) fetchUnityBuildVersion() (string, error) {
 	// Hardcoded build version as requested
-	return "5.7.0.0.0", nil
+	return "5.8.0.0.0", nil
 
 	// Original implementation commented out below
 	/*
