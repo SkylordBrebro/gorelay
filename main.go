@@ -48,7 +48,6 @@ func main() {
 			log.Fatalf("Failed to update: %v", err)
 		}
 		
-		cfg.BuildVersion = version
 		log.Printf("Build version: %s", version)
 		// Save XML files
 		if err := os.MkdirAll("Xml", 0755); err != nil {
@@ -60,6 +59,13 @@ func main() {
 			if err := os.WriteFile("Xml/"+filename + ".xml", []byte(content), 0644); err != nil {
 				log.Fatalf("Failed to write XML file %s: %v", filename, err)
 			}
+		}
+		
+		//write buildversion and buildhash to config
+		cfg.BuildVersion = version
+		cfg.BuildHash = newBuildHash
+		if err := config.SaveConfig(*configPath, cfg); err != nil {
+			log.Fatalf("Failed to save config: %v", err)
 		}
 	} else {
 		//no update, load xmls from files
