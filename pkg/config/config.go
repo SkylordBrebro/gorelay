@@ -3,7 +3,6 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 )
 
@@ -40,13 +39,13 @@ type Config struct {
 		Path    string   `json:"path"`
 		List    []string `json:"list"`
 	} `json:"plugins"`
-
-	HWIDToken string `json:"hwidToken"`
 }
+
+var cfg *Config
 
 // LoadConfig loads the configuration from a JSON file
 func LoadConfig(path string) (*Config, error) {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Create default config if it doesn't exist
@@ -97,6 +96,8 @@ func LoadConfig(path string) (*Config, error) {
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config: %v", err)
 	}
+	
+	cfg = &config
 
 	return &config, nil
 }
@@ -108,7 +109,7 @@ func (c *Config) Save(path string) error {
 		return fmt.Errorf("failed to marshal config: %v", err)
 	}
 
-	if err := ioutil.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0644); err != nil {
 		return fmt.Errorf("failed to write config: %v", err)
 	}
 
@@ -123,4 +124,11 @@ func SaveConfig(path string, cfg *Config) error {
 	}
 
 	return os.WriteFile(path, data, 0644)
+}
+
+func GetConfig() *Config {
+	if cfg == nil {
+		fmt.Println("Warning: Config not loaded")
+	}
+	return cfg
 }
