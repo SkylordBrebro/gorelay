@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -15,6 +16,9 @@ import (
 	"gorelay/pkg/logger"
 	"gorelay/pkg/plugin"
 	"gorelay/pkg/server"
+	"gorelay/pkg/updater"
+	"gorelay/pkg/version"
+	"gorelay/pkg/xmldata"
 )
 
 func main() {
@@ -23,11 +27,61 @@ func main() {
 	accountsPath := flag.String("accounts", "accounts.json", "Path to accounts file")
 	debug := flag.Bool("debug", false, "Enable debug logging")
 	flag.Parse()
+	
+	newBuildHash, err := version.FetchUnityBuildHash(nil)
+	if err != nil {
+		log.Fatalf("Failed to fetch build version from server: %v", err)
+	}
 
 	// Load configuration
 	cfg, err := config.LoadConfig(*configPath)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
+	}
+	
+	if cfg.BuildHash != newBuildHash {
+		log.Printf("New update available, downloading from server")
+		
+		//new update, download from server
+		version, xmls, err := updater.DoUpdate(newBuildHash)
+		if err != nil {
+			log.Fatalf("Failed to update: %v", err)
+		}
+		
+		cfg.BuildVersion = version
+		log.Printf("Build version: %s", version)
+		// Save XML files
+		if err := os.MkdirAll("Xml", 0755); err != nil {
+			log.Fatalf("Failed to create Xml directory: %v", err)
+		}
+		
+		for filename, content := range xmls {
+			log.Printf("saving XML file: %s (length: %d)", filename, len(content))
+			if err := os.WriteFile("Xml/"+filename + ".xml", []byte(content), 0644); err != nil {
+				log.Fatalf("Failed to write XML file %s: %v", filename, err)
+			}
+		}
+	} else {
+		//no update, load xmls from files
+		files, err := os.ReadDir("Xml")
+		if err != nil {
+			log.Fatalf("Failed to read Xml directory: %v", err)
+		}
+
+		for _, file := range files {
+			if !strings.HasSuffix(file.Name(), ".xml") {
+				continue
+			}
+
+			content, err := os.ReadFile("Xml/" + file.Name())
+			if err != nil {
+				log.Fatalf("Failed to read XML file %s: %v", file.Name(), err)
+			}
+
+			// Remove .xml extension to get the name
+			name := strings.TrimSuffix(file.Name(), ".xml")
+			xmldata.StoreXML(name, string(content))
+		}
 	}
 
 	// Initialize logger

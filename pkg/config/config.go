@@ -9,7 +9,8 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	BuildVersion string `json:"buildVersion"`
+	BuildHash string `json:"buildHash"` //hex hash
+	BuildVersion string `json:"buildVersion"` //version string
 	LocalServer  struct {
 		Enabled bool `json:"enabled"`
 		Port    int  `json:"port"`
