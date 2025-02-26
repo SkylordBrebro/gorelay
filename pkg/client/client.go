@@ -70,9 +70,9 @@ type Client struct {
 // NewClient creates a new RotMG client instance
 func NewClient(acc *account.Account, cfg *config.Config, log *logger.Logger) *Client {
 	// First verify the account if needed
-	if acc.NeedAccountVerify() {
-		log.Info("Client", "Verifying account %s...", acc.Alias)
-		if err := acc.VerifyAccount(cfg.HWIDToken); err != nil {
+	if true || acc.NeedAccountVerify() {
+		log.Info("Client", "Verifying account %s... with token %s", acc.Alias, acc.HwidToken)
+		if err := acc.VerifyAccount(acc.HwidToken); err != nil {
 			log.Error("Client", "Failed to verify account %s: %v", acc.Alias, err)
 			return nil
 		}
@@ -140,7 +140,6 @@ func NewClient(acc *account.Account, cfg *config.Config, log *logger.Logger) *Cl
 		return nil
 	}
 
-	client.state.BuildVer = cfg.BuildVersion
 	log.Info("Client", "Successfully created client for %s on server %s", acc.Alias, server.Name)
 	return client
 }
@@ -240,14 +239,6 @@ func (c *Client) Connect() error {
 		return fmt.Errorf("client already connected")
 	}
 
-	// Fetch Unity build version from init endpoint
-	buildVersion, err := c.fetchUnityBuildVersion()
-	if err != nil {
-		return fmt.Errorf("failed to fetch Unity build version: %v", err)
-	}
-	c.state.BuildVer = buildVersion
-	c.config.BuildVersion = buildVersion
-
 	// Ensure required components are initialized
 	if c.packetHandler == nil {
 		c.packetHandler = packets.NewPacketHandler()
@@ -306,43 +297,26 @@ func (c *Client) Connect() error {
 		}
 
 		// Create and send Hello packet
-		// We'll need to implement a proper send method that works with the pclient.Hello type
-		// For now, we'll create a simple struct that matches what we need
-		type HelloPacket struct {
-			BuildVersion  string
-			GameNet       string
-			PlayPlatform  string
-			PlatformToken string
-			AccessToken   string
-			KeyTime       int32
-			Key           []byte
-			GameID        int32
-			ClientToken   string
-		}
-
-		// Create the hello packet data
-		helloData := HelloPacket{
-			BuildVersion:  c.state.BuildVer,
-			GameNet:       "Unity",
-			PlayPlatform:  "Unity",
-			PlatformToken: "",
-			AccessToken:   c.accountInfo.AccessToken,
-			KeyTime:       int32(time.Now().Unix()),
-			Key:           []byte{}, // Empty for now
-			GameID:        -2,
-			ClientToken:   c.config.HWIDToken,
-		}
+		hello := client.NewHello()
+		hello.GameID = -2
+		hello.BuildVersion = c.config.BuildVersion
+		hello.AccessToken = c.accountInfo.AccessToken
+		hello.KeyTime = -1
+		hello.Key = []byte{}
+		hello.GameNet = "rotmg"
+		hello.PlayPlatform = "rotmg"
+		hello.PlatformToken = ""
+		hello.ClientToken = c.accountInfo.HwidToken
+		hello.ClientIdentification = "XQpu8CWkMehb5rLVP3DG47FcafExRUvg"
 
 		// TODO: Implement proper packet encoding and sending
 		// This is a placeholder until we implement the proper packet handling
-		c.logger.Info("Client", "Sending Hello packet with build version: %s", helloData.BuildVersion)
+		c.logger.Info("Client", "Sending Hello packet: %s", hello.ToString())
 
-		// For now, we'll just create a simple byte array to send
-		// In the future, this should use the proper packet encoding
-		helloBytes := []byte{0x00} // Packet ID 0 for Hello
-		// Append other data...
+		writer := packets.NewPacketWriter()
+		hello.Write(writer)
 
-		if _, err := c.conn.Write(helloBytes); err != nil {
+		if _, err := c.conn.Write(writer.Bytes()); err != nil {
 			c.logger.Error("Client", "Failed to send Hello packet: %v", err)
 			c.conn.Close()
 			continue
@@ -382,7 +356,6 @@ func (c *Client) registerPacketHandlers() {
 
 		// Log connection details
 		c.logger.Info("Client", "Connection details:")
-		c.logger.Info("Client", "  Build Version: %s", c.state.BuildVer)
 		c.logger.Info("Client", "  Account: %s", c.accountInfo.Alias)
 		c.logger.Info("Client", "  Server: %s", c.server.Name)
 
@@ -484,8 +457,8 @@ func (c *Client) registerPacketHandlers() {
 		case int32(4): // IncorrectVersion
 			c.logger.Info("Client", "Build version out of date. Updating and reconnecting...")
 			// Update build version in config and state
+			//todo: probably don't do this...
 			c.config.BuildVersion = packet.ErrorMessage
-			c.state.BuildVer = packet.ErrorMessage
 			// Save updated config
 			if err := config.SaveConfig("config.json", c.config); err != nil {
 				c.logger.Error("Client", "Failed to save updated build version: %v", err)
@@ -760,6 +733,7 @@ func (c *Client) handlePackets() {
 
 		// Log packet details
 		c.logger.Debug("Client", "Received packet - ID: %d, Length: %d bytes", packetID, packetLength)
+		//wtf is this?
 		if payloadLength > 0 {
 			maxBytes := 16
 			if payloadLength < maxBytes {
@@ -767,19 +741,6 @@ func (c *Client) handlePackets() {
 			}
 			c.logger.Debug("Client", "Encrypted payload (first %d bytes): % x", maxBytes, payload[:maxBytes])
 			c.logger.Debug("Client", "Decrypted payload (first %d bytes): % x", maxBytes, decryptedPayload[:maxBytes])
-		}
-
-		// Special handling for Hello packet (ID 0)
-		if packetID == 0 {
-			c.logger.Info("Client", "Received Hello packet response")
-			c.logger.Debug("Client", "Full Hello packet payload: % x", decryptedPayload)
-
-			if len(decryptedPayload) > 0 {
-				c.logger.Info("Client", "Hello packet details:")
-				c.logger.Info("Client", "  Build Version: %s", c.state.BuildVer)
-				c.logger.Info("Client", "  Account: %s", c.accountInfo.Alias)
-				c.logger.Info("Client", "  Connected to: %s", c.server.Name)
-			}
 		}
 
 		// If we have a version manager, try to get the packet name
@@ -817,9 +778,7 @@ func (c *Client) reconnect() {
 	c.connected = false
 
 	// Reset game state
-	c.state = &GameState{
-		BuildVer: c.state.BuildVer, // Preserve build version
-	}
+	c.state = &GameState{}
 	c.enemies = make(map[int32]*Enemy)
 	c.players = make(map[int32]*Player)
 	c.projectiles = make(map[int32]*Projectile)
@@ -1111,81 +1070,4 @@ func (p *packetWrapper) Structure() string {
 
 func (p *packetWrapper) Type() interfaces.PacketType {
 	return p.packetType
-}
-
-// Add new function to fetch Unity build version
-func (c *Client) fetchUnityBuildVersion() (string, error) {
-	// Hardcoded build version as requested
-	return "5.8.0.0.0", nil
-
-	// Original implementation commented out below
-	/*
-		baseURL := "https://www.realmofthemadgod.com/app/init"
-
-		// Create HTTP client with appropriate headers
-		client := &http.Client{}
-
-		// Prepare form data
-		data := make(url.Values)
-		data.Set("platform", "standalonewindows64")
-		data.Set("key", "9KnJFxtTvLu2frXv")
-		data.Set("game_net", "Unity")
-		data.Set("play_platform", "Unity")
-		data.Set("game_net_user_id", "")
-
-		// Create request
-		req, err := http.NewRequest("POST", baseURL, strings.NewReader(data.Encode()))
-		if err != nil {
-			return "", fmt.Errorf("failed to create request: %v", err)
-		}
-
-		// Set Unity-specific headers
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		req.Header.Set("X-Unity-Version", "2021.3.16f1")
-		req.Header.Set("User-Agent", "UnityPlayer/2021.3.16f1 (UnityWebRequest/1.0, libcurl/7.84.0-DEV)")
-
-		// Send request
-		resp, err := client.Do(req)
-		if err != nil {
-			return "", fmt.Errorf("failed to send request: %v", err)
-		}
-		defer resp.Body.Close()
-
-		// Check response status
-		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
-			return "", fmt.Errorf("server returned status %d: %s", resp.StatusCode, string(body))
-		}
-
-		// Read response
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return "", fmt.Errorf("failed to read response: %v", err)
-		}
-
-		// Log response for debugging
-		c.logger.Debug("Client", "Init response: %s", string(body))
-
-		// Parse XML response
-		doc := &struct {
-			XMLName      xml.Name `xml:"AppSettings"`
-			BuildHash    string   `xml:"BuildHash"`
-			BuildCDN     string   `xml:"BuildCDN"`
-			BuildVersion string   `xml:"BuildVersion"`
-		}{}
-
-		if err := xml.Unmarshal(body, doc); err != nil {
-			return "", fmt.Errorf("failed to parse XML response: %v", err)
-		}
-
-		// Return BuildVersion if available, otherwise use BuildHash
-		if doc.BuildVersion != "" {
-			return doc.BuildVersion, nil
-		}
-		if doc.BuildHash != "" {
-			return doc.BuildHash, nil
-		}
-
-		return "", fmt.Errorf("neither BuildVersion nor BuildHash found in response")
-	*/
 }

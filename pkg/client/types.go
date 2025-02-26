@@ -69,7 +69,6 @@ type GameState struct {
 	WorldPos      *WorldPosData
 	PlayerData    *PlayerData
 	GameID        int32
-	BuildVer      string
 	LastUpdate    time.Time
 	LastFrameTime int64
 }

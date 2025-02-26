@@ -1,10 +1,12 @@
 package account
 
 import (
+	"crypto"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -20,9 +22,9 @@ type Account struct {
 	Alias       string    `json:"alias"`
 	ServerPref  string    `json:"serverPref"`
 	CharID      int32     `json:"charId"`
-	AccessToken string    `json:"accessToken"`
 	LastVerify  time.Time `json:"lastVerify"`
 	Reconnect   bool      `json:"-"` // Used to signal manual reconnection
+	HwidToken   string    `json:"hwidToken"`
 
 	// Additional fields from C# implementation
 	Banned                bool               `json:"banned"`
@@ -48,6 +50,7 @@ type Account struct {
 	IsAgeVerified         bool               `json:"isAgeVerified"`
 	TDone                 bool               `json:"tDone"`
 	SecurityQuestions     *SecurityQuestions `json:"securityQuestions"`
+	AccessToken           string             `json:"accessToken"`
 	AccessTokenTimestamp  int64              `json:"accessTokenTimestamp"`
 	AccessTokenExpiration int                `json:"accessTokenExpiration"`
 	Discoverable          bool               `json:"discoverable"`
@@ -208,6 +211,9 @@ func LoadAccounts(path string) (*AccountManager, error) {
 		if acc.Email == "" && acc.GUID != "" {
 			acc.Email = acc.GUID
 		}
+		//todo: FIX
+		log.Println("clientToken: " + string(crypto.SHA1.New().Sum([]byte(acc.Email))))
+		acc.HwidToken = "b968bea6009e5d3971927d2738d329f4ea287b25"
 		// If GUID is empty but Email is set, use Email as GUID
 		if acc.GUID == "" && acc.Email != "" {
 			acc.GUID = acc.Email

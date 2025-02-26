@@ -1,6 +1,8 @@
 ﻿package client
 
 import (
+	"encoding/hex"
+	"fmt"
 	"gorelay/pkg/packets"
 	"gorelay/pkg/packets/interfaces"
 )
@@ -113,3 +115,10 @@ func (p *Hello) Write(w *packets.PacketWriter) error {
 	}
 	return w.WriteString(p.ClientIdentification)
 }
+
+// String returns a string representation of the Hello struct
+func (p *Hello) ToString() string {
+	return fmt.Sprintf("GameID: %d, BuildVersion: %s, AccessToken: %s, KeyTime: %d, Key: %s, GameNet: %s, PlayPlatform: %s, PlatformToken: %s, ClientToken: %s, ClientIdentification: %s",
+		p.GameID, p.BuildVersion, p.AccessToken, p.KeyTime, hex.EncodeToString(p.Key), p.GameNet, p.PlayPlatform, p.PlatformToken, p.ClientToken, p.ClientIdentification)
+}
+
