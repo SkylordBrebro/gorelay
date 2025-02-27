@@ -319,20 +319,7 @@ func (c *Client) Connect() error {
 		c.logger.Info("Client", "Sending Hello")
 		//c.logger.Info("Client", "Sending Hello packet: %s", hello.ToString())
 
-		writer := packets.NewPacketWriter()
-		hello.Write(writer)
-
-		header := packets.NewPacketWriter()
-		header.WriteInt32(int32(5 + len(writer.Bytes())))
-		header.WriteByte(byte(interfaces.Hello))
-		header.WriteBytes(writer.Bytes())
-		encoded := header.Bytes()
-		//c.logger.Info("Client", "Pre-ciphered Hello: % x", header.Bytes())
-		rc4Manager.Encrypt(encoded)
-		
-		//c.logger.Info("Client", "Post-ciphered Hello: % x", header.Bytes())
-		
-		if _, err := c.conn.Write(header.Bytes()); err != nil {
+		if err := c.sendPacket(hello); err != nil {
 			c.logger.Error("Client", "Failed to send Hello packet: %v", err)
 			c.conn.Close()
 			continue
@@ -346,6 +333,31 @@ func (c *Client) Connect() error {
 
 	return fmt.Errorf("failed to connect after %d attempts: %v",
 		c.maxReconnectAttempts, lastErr)
+}
+
+// sendPacket sends a packet to the server with proper RC4 encryption and header construction
+func (c *Client) sendPacket(p packets.Packet) error {
+	// Create packet writer and write packet contents
+	writer := packets.NewPacketWriter()
+	p.Write(writer)
+
+	// Create header with packet size and ID
+	header := packets.NewPacketWriter()
+	header.WriteInt32(int32(5 + len(writer.Bytes())))
+	header.WriteByte(byte(p.ID()))
+	header.WriteBytes(writer.Bytes())
+	
+	// Get final encoded bytes and encrypt
+	encoded := header.Bytes()
+	c.rc4.Encrypt(encoded)
+	
+	// Send to server
+	if _, err := c.conn.Write(header.Bytes()); err != nil {
+		c.logger.Error("Client", "Failed to send packet: %v", err)
+		return err
+	}
+
+	return nil
 }
 
 // Disconnect closes the connection to the game server
@@ -365,16 +377,12 @@ func (c *Client) Disconnect() {
 
 // registerPacketHandlers sets up handlers for different packet types
 func (c *Client) registerPacketHandlers() {
-	// Handle Hello packet
-	c.packetHandler.RegisterHandler(0, func(data []byte) error {
-		c.logger.Info("Client", "Handling Hello packet")
-		c.logger.Info("Client", "Hello packet data: % x", data)
-
-		// Log connection details
-		c.logger.Info("Client", "Connection details:")
-		c.logger.Info("Client", "  Account: %s", c.accountInfo.Alias)
-		c.logger.Info("Client", "  Server: %s", c.server.Name)
-
+	c.packetHandler.RegisterHandler(int(interfaces.MapInfo), func(data []byte) error {
+		packet := &server.MapInfo{}
+		c.rc4.Decrypt(data)
+		reader := packets.NewPacketReader(data)
+		packet.Read(reader)
+		c.logger.Info("Client", "MapInfo: %v", packet)
 		return nil
 	})
 

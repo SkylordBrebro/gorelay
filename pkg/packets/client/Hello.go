@@ -34,8 +34,8 @@ func (p *Hello) Type() interfaces.PacketType {
 	return interfaces.Hello
 }
 
-// Read reads the packet data from a PacketReader
-func (p *Hello) Read(r *packets.PacketReader) error {
+// Read reads the packet data from a Reader
+func (p *Hello) Read(r interfaces.Reader) error {
 	var err error
 	p.GameID, err = r.ReadInt32()
 	if err != nil {
@@ -81,8 +81,8 @@ func (p *Hello) Read(r *packets.PacketReader) error {
 	return err
 }
 
-// Write writes the packet data to a PacketWriter
-func (p *Hello) Write(w *packets.PacketWriter) error {
+// Write writes the packet data to a Writer
+func (p *Hello) Write(w interfaces.Writer) error {
 	if err := w.WriteInt32(p.GameID); err != nil {
 		return err
 	}
@@ -120,5 +120,25 @@ func (p *Hello) Write(w *packets.PacketWriter) error {
 func (p *Hello) ToString() string {
 	return fmt.Sprintf("GameID: %d, BuildVersion: %s, AccessToken: %s, KeyTime: %d, Key: %s, GameNet: %s, PlayPlatform: %s, PlatformToken: %s, ClientToken: %s, ClientIdentification: %s",
 		p.GameID, p.BuildVersion, p.AccessToken, p.KeyTime, hex.EncodeToString(p.Key), p.GameNet, p.PlayPlatform, p.PlatformToken, p.ClientToken, p.ClientIdentification)
+}
+
+// String returns a string representation of the packet
+func (p *Hello) String() string {
+	return p.ToString()
+}
+
+// HasNulls checks if any fields in the packet are null
+func (p *Hello) HasNulls() bool {
+	return false
+}
+
+// Structure returns a string representation of the packet structure
+func (p *Hello) Structure() string {
+	return fmt.Sprintf("Hello Packet (ID=%d)", p.ID())
+}
+
+// ID returns the packet ID
+func (p *Hello) ID() int32 {
+	return int32(interfaces.Hello)
 }
 
