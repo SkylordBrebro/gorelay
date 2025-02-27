@@ -14,6 +14,7 @@ import (
 	"gorelay/pkg/client"
 	"gorelay/pkg/config"
 	"gorelay/pkg/logger"
+	"gorelay/pkg/models"
 	"gorelay/pkg/plugin"
 	"gorelay/pkg/server"
 	"gorelay/pkg/updater"
@@ -27,7 +28,7 @@ func main() {
 	accountsPath := flag.String("accounts", "accounts.json", "Path to accounts file")
 	debug := flag.Bool("debug", false, "Enable debug logging")
 	flag.Parse()
-	
+
 	newBuildHash, err := version.FetchUnityBuildHash(nil)
 	if err != nil {
 		log.Fatalf("Failed to fetch build version from server: %v", err)
@@ -38,29 +39,29 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
-	
+
 	if cfg.BuildHash != newBuildHash {
 		log.Printf("New update available, downloading from server")
-		
+
 		//new update, download from server
 		version, xmls, err := updater.DoUpdate(newBuildHash)
 		if err != nil {
 			log.Fatalf("Failed to update: %v", err)
 		}
-		
+
 		log.Printf("Build version: %s", version)
 		// Save XML files
 		if err := os.MkdirAll("Xml", 0755); err != nil {
 			log.Fatalf("Failed to create Xml directory: %v", err)
 		}
-		
+
 		for filename, content := range xmls {
 			log.Printf("saving XML file: %s (length: %d)", filename, len(content))
-			if err := os.WriteFile("Xml/"+filename + ".xml", []byte(content), 0644); err != nil {
+			if err := os.WriteFile("Xml/"+filename+".xml", []byte(content), 0644); err != nil {
 				log.Fatalf("Failed to write XML file %s: %v", filename, err)
 			}
 		}
-		
+
 		//write buildversion and buildhash to config
 		cfg.BuildVersion = version
 		cfg.BuildHash = newBuildHash
@@ -112,9 +113,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Initialize account aliases for the monitor server
+	aliases := make([]string, len(accManager.Accounts))
+	for i, acc := range accManager.Accounts {
+		aliases[i] = acc.Alias
+	}
+	models.SetAccountAliases(aliases)
+
 	// Create wait group for managing client goroutines
 	var wg sync.WaitGroup
-	clients := make([]*client.Client, len(accManager.Accounts))
+	var clients []*client.Client
 	clientMutex := sync.RWMutex{}
 
 	// Create and connect clients concurrently
@@ -125,6 +133,10 @@ func main() {
 
 			// Create client
 			client := client.NewClient(acc, cfg, logger)
+			if client == nil {
+				logger.Error("Main", "Failed to create client for account %s, skipping", acc.Alias)
+				return
+			}
 
 			// Create plugin manager
 			pluginManager := plugin.NewManager(client)
@@ -141,7 +153,7 @@ func main() {
 
 			// Add client to slice with proper synchronization
 			clientMutex.Lock()
-			clients[index] = client
+			clients = append(clients, client)
 			clientMutex.Unlock()
 
 			// Connect client with retries

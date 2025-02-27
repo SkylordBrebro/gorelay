@@ -786,8 +786,7 @@ func (c *Client) reconnect() {
 	c.connected = false
 
 	// Reset game state
-	c.state = &GameState{
-	}
+	c.state = &GameState{}
 	c.enemies = make(map[int32]*Enemy)
 	c.players = make(map[int32]*Player)
 	c.projectiles = make(map[int32]*Projectile)

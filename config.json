@@ -1,5 +1,6 @@
 {
-  "buildVersion": "",
+  "buildHash": "b5d0f9c562c6b513df8e262e3e281c7a",
+  "buildVersion": "5.8.0.0.0",
   "localServer": {
     "enabled": false,
     "port": 2050
@@ -22,6 +23,5 @@
     "enabled": false,
     "path": "plugins",
     "list": []
-  },
-  "hwidToken": ""
+  }
 }
