@@ -71,7 +71,7 @@ type Client struct {
 func NewClient(acc *account.Account, cfg *config.Config, log *logger.Logger) *Client {
 	// First verify the account if needed
 	if true || acc.NeedAccountVerify() {
-		log.Info("Client", "Verifying account %s... with token %s", acc.Alias, acc.HwidToken)
+		log.Info("Client", "Verifying account %s (token %s)", acc.Alias, acc.HwidToken)
 		if err := acc.VerifyAccount(acc.HwidToken); err != nil {
 			log.Error("Client", "Failed to verify account %s: %v", acc.Alias, err)
 			return nil
@@ -309,14 +309,22 @@ func (c *Client) Connect() error {
 		hello.ClientToken = c.accountInfo.HwidToken
 		hello.ClientIdentification = "XQpu8CWkMehb5rLVP3DG47FcafExRUvg"
 
-		// TODO: Implement proper packet encoding and sending
-		// This is a placeholder until we implement the proper packet handling
 		c.logger.Info("Client", "Sending Hello packet: %s", hello.ToString())
 
 		writer := packets.NewPacketWriter()
 		hello.Write(writer)
 
-		if _, err := c.conn.Write(writer.Bytes()); err != nil {
+		header := packets.NewPacketWriter()
+		header.WriteInt32(int32(5 + len(writer.Bytes())))
+		header.WriteByte(byte(interfaces.Hello))
+		header.WriteBytes(writer.Bytes())
+		encoded := header.Bytes()
+		c.logger.Info("Client", "Pre-ciphered Hello: % x", header.Bytes())
+		rc4Manager.Encrypt(encoded)
+		
+		c.logger.Info("Client", "Post-ciphered Hello: % x", header.Bytes())
+		
+		if _, err := c.conn.Write(header.Bytes()); err != nil {
 			c.logger.Error("Client", "Failed to send Hello packet: %v", err)
 			c.conn.Close()
 			continue
