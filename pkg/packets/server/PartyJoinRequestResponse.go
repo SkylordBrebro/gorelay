@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"gorelay/pkg/packets/interfaces"
@@ -92,4 +92,8 @@ func (p *PartyJoinRequestResponse) Write(w interfaces.Writer) error {
 	}
 
 	return nil
+}
+
+func (p *PartyJoinRequestResponse) ID() int32 {
+	return int32(interfaces.PartyJoinRequestResponse)
 }

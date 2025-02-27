@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"fmt"
@@ -131,4 +131,8 @@ func CreateNotificationWithColor(objectId int32, color int32, message string) *N
 		Color:            color,
 	}
 	return notification
+}
+
+func (p *Notification) ID() int32 {
+	return int32(interfaces.Notification)
 }

@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"gorelay/pkg/packets/interfaces"
@@ -68,4 +68,8 @@ func (p *QuestObjectId) Write(w interfaces.Writer) error {
 	}
 
 	return nil
+}
+
+func (p *QuestObjectId) ID() int32 {
+	return int32(interfaces.QuestObjectId)
 }

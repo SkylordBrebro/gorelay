@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"gorelay/pkg/packets/interfaces"
@@ -24,4 +24,8 @@ func (p *ResetDailyQuests) Read(r interfaces.Reader) error {
 func (p *ResetDailyQuests) Write(w interfaces.Writer) error {
 	// No data to write
 	return nil
+}
+
+func (p *ResetDailyQuests) ID() int32 {
+	return int32(interfaces.ResetDailyQuests)
 }

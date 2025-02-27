@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"gorelay/pkg/packets/interfaces"
@@ -51,4 +51,8 @@ func (p *InvitedToGuild) Write(w interfaces.Writer) error {
 	}
 
 	return nil
+}
+
+func (p *InvitedToGuild) ID() int32 {
+	return int32(interfaces.InvitedToGuild)
 }

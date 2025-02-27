@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"fmt"
@@ -185,4 +185,8 @@ func HexStringToByteArray(hex string) []byte {
 	}
 
 	return result
+}
+
+func (p *Reconnect) ID() int32 {
+	return int32(interfaces.Reconnect)
 }

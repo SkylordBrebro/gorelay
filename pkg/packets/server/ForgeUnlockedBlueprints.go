@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"gorelay/pkg/packets/interfaces"
@@ -56,4 +56,8 @@ func (p *ForgeUnlockedBlueprints) Write(w interfaces.Writer) error {
 	}
 
 	return nil
+}
+
+func (p *ForgeUnlockedBlueprints) ID() int32 {
+	return int32(interfaces.ForgeUnlockedBlueprints)
 }

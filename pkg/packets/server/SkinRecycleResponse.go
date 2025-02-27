@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"gorelay/pkg/packets/dataobjects"
@@ -53,4 +53,8 @@ func (p *SkinRecycleResponse) Write(w interfaces.Writer) error {
 	}
 
 	return nil
+}
+
+func (p *SkinRecycleResponse) ID() int32 {
+	return int32(interfaces.SkinRecycleResponse)
 }

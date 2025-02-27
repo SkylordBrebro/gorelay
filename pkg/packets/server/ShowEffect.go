@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"bytes"
@@ -285,4 +285,8 @@ func (bw *bufferWriter) WriteBool(b bool) error {
 func (bw *bufferWriter) WriteCompressedInt(i int) error {
 	// Placeholder implementation
 	return nil
+}
+
+func (p *ShowEffect) ID() int32 {
+	return int32(interfaces.ShowEffect)
 }

@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"gorelay/pkg/packets/interfaces"
@@ -24,4 +24,8 @@ func (p *ExaltationBonusChanged) Read(r interfaces.Reader) error {
 func (p *ExaltationBonusChanged) Write(w interfaces.Writer) error {
 	// No fields to write
 	return nil
+}
+
+func (p *ExaltationBonusChanged) ID() int32 {
+	return int32(interfaces.ExaltationBonusChanged)
 }

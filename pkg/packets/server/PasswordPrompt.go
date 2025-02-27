@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"gorelay/pkg/packets/interfaces"
@@ -31,4 +31,8 @@ func (p *PasswordPrompt) Read(r interfaces.Reader) error {
 // Write writes the packet data to the provided writer
 func (p *PasswordPrompt) Write(w interfaces.Writer) error {
 	return w.WriteInt32(p.CleanPasswordStatus)
+}
+
+func (p *PasswordPrompt) ID() int32 {
+	return int32(interfaces.PasswordPrompt)
 }

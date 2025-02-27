@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"gorelay/pkg/packets/interfaces"
@@ -299,4 +299,8 @@ func (p *VaultContent) Write(w interfaces.Writer) error {
 	}
 
 	return nil
+}
+
+func (p *VaultContent) ID() int32 {
+	return int32(interfaces.VaultContent)
 }

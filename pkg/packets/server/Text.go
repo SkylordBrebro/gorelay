@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"gorelay/pkg/packets/interfaces"
@@ -181,4 +181,8 @@ func CreateCustomText(name, message string) *Text {
 		Recipient:  "",
 		RawText:    message,
 	}
+}
+
+func (p *Text) ID() int32 {
+	return int32(interfaces.Text)
 }

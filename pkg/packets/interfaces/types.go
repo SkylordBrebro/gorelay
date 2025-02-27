@@ -1,10 +1,10 @@
 package interfaces
 
 // PacketType represents different types of network packets
-type PacketType int
+type PacketType byte
 
 const (
-	Unknown                              PacketType = -1
+	Unknown                              PacketType = 255
 	Failure                              PacketType = 0
 	Teleport                             PacketType = 1
 	ClaimDailyReward                     PacketType = 3
@@ -170,14 +170,15 @@ const (
 	PartyJoinResponse                    PacketType = 218
 	BuyItems                             PacketType = 223
 
-	PartyActionResult        PacketType = -2
-	PartyInviteResponse      PacketType = -3
-	PartyJoinRequest         PacketType = -4
-	PartyAction              PacketType = -5
-	PartyJoinRequestResponse PacketType = -6
-	PartyMemberAdded         PacketType = -7
-	IncomingPartyInvite      PacketType = -8
-	IncomingPartyMemberInfo  PacketType = -9
+	//todo: WRONG IDS, NEED TO FIX
+	PartyActionResult        PacketType = 242
+	PartyInviteResponse      PacketType = 243
+	PartyJoinRequest         PacketType = 244
+	PartyAction              PacketType = 245
+	PartyJoinRequestResponse PacketType = 246
+	PartyMemberAdded         PacketType = 247
+	IncomingPartyInvite      PacketType = 248
+	IncomingPartyMemberInfo  PacketType = 249
 )
 
 // Reader defines the interface for reading packet data

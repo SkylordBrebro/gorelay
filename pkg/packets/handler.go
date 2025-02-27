@@ -11,7 +11,7 @@ type PacketHandler struct {
 	packets  map[int]reflect.Type
 }
 
-type PacketHandlerFunc func(data []byte) error
+type PacketHandlerFunc func(packet Packet) error
 
 // NewPacketHandler creates a new packet handler instance
 func NewPacketHandler() *PacketHandler {
@@ -37,10 +37,11 @@ func (ph *PacketHandler) RegisterPacket(packetID int, packet interface{}) error 
 }
 
 // HandlePacket processes an incoming packet
-func (ph *PacketHandler) HandlePacket(packetID int, data []byte) error {
+func (ph *PacketHandler) HandlePacket(packetID int, packet Packet) error {
 	if handler, ok := ph.handlers[packetID]; ok {
-		return handler(data)
+		return handler(packet)
 	}
+	//in the future, don't return an error, just log it
 	return fmt.Errorf("no handler registered for packet ID %d", packetID)
 }
 

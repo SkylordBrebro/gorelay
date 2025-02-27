@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"fmt"
@@ -83,4 +83,8 @@ func (p *QuestFetchResponse) String() string {
 
 	return fmt.Sprintf("QuestFetchResponse (NextRefreshPrice = %d, Quests = %s",
 		p.NextRefreshPrice, strings.Join(questStrings, "\n"))
+}
+
+func (p *QuestFetchResponse) ID() int32 {
+	return int32(interfaces.QuestFetchResponse)
 }

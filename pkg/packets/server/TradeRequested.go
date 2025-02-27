@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"gorelay/pkg/packets/interfaces"
@@ -24,4 +24,8 @@ func (p *TradeRequested) Read(r interfaces.Reader) error {
 // Write writes the packet data to the provided writer
 func (p *TradeRequested) Write(w interfaces.Writer) error {
 	return w.WriteString(p.Name)
+}
+
+func (p *TradeRequested) ID() int32 {
+	return int32(interfaces.TradeRequested)
 }

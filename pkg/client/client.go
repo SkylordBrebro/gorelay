@@ -4,10 +4,8 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"math"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
@@ -375,55 +373,127 @@ func (c *Client) Disconnect() {
 	c.connected = false
 }
 
+var packetTypes = map[interfaces.PacketType]packets.Packet{
+	interfaces.AccountList: &server.AccountList{},
+	interfaces.ActivePet: &server.ActivePet{},
+	interfaces.AllyShoot: &server.AllyShoot{},
+	interfaces.AOE: &server.AOE{},
+	interfaces.BoostBPMilestoneResult: &server.BoostBPMilestoneResult{},
+	interfaces.BuyItemResult: &server.BuyItemResult{},
+	interfaces.BuyResult: &server.BuyResult{},
+	interfaces.ClaimBPMilestoneResult: &server.ClaimBPMilestoneResult{},
+	interfaces.ClaimMissionResult: &server.ClaimMissionResult{},
+	interfaces.CreateSuccess: &server.CreateSuccess{},
+	interfaces.CrucibleResult: &server.CrucibleResult{},
+	interfaces.Damage: &server.Damage{},
+	interfaces.Death: &server.Death{},
+	interfaces.DeletePet: &server.DeletePet{},
+	interfaces.DrawDebugArrow: &server.DrawDebugArrow{},
+	interfaces.DrawDebugShape: &server.DrawDebugShape{},
+	interfaces.EnemyShoot: &server.EnemyShoot{},
+	interfaces.EvolvedPet: &server.EvolvedPet{},
+	interfaces.ExaltationBonusChanged: &server.ExaltationBonusChanged{},
+	interfaces.Failure: &server.Failure{},
+	interfaces.File: &server.File{},
+	interfaces.ForgeResult: &server.ForgeResult{},
+	interfaces.ForgeUnlockedBlueprints: &server.ForgeUnlockedBlueprints{},
+	interfaces.Goto: &server.Goto{},
+	interfaces.GuildResult: &server.GuildResult{},
+	interfaces.HatchPet: &server.HatchPet{},
+	interfaces.HeroLeft: &server.HeroLeft{},
+	interfaces.IncomingPartyInvite: &server.IncomingPartyInvite{},
+	interfaces.IncomingPartyMemberInfo: &server.IncomingPartyMemberInfo{},
+	interfaces.InventoryResult: &server.InventoryResult{},
+	interfaces.InvitedToGuild: &server.InvitedToGuild{},
+	interfaces.KeyInfoResponse: &server.KeyInfoResponse{},
+	interfaces.MapInfo: &server.MapInfo{},
+	interfaces.MissionProgressUpdate: &server.MissionProgressUpdate{},
+	interfaces.MultipleMissionsProgressUpdate: &server.MultipleMissionsProgressUpdate{},
+	interfaces.NameResult: &server.NameResult{},
+	interfaces.NewAbility: &server.NewAbility{},
+	interfaces.NewCharacterInformation: &server.NewCharacterInformation{},
+	interfaces.NewTick: &server.NewTick{},
+	interfaces.Notification: &server.Notification{},
+	interfaces.PartyAction: &server.PartyAction{},
+	interfaces.PartyJoinRequestResponse: &server.PartyJoinRequestResponse{},
+	interfaces.PartyJoinResponse: &server.PartyJoinResponse{},
+	interfaces.PartyList: &server.PartyList{},
+	interfaces.PartyMemberAdded: &server.PartyMemberAdded{},
+	interfaces.PasswordPrompt: &server.PasswordPrompt{},
+	interfaces.PetYardUpdate: &server.PetYardUpdate{},
+	interfaces.Pic: &server.Pic{},
+	interfaces.Ping: &server.Ping{},
+	interfaces.PlayersList: &server.PlayersList{},
+	interfaces.PlaySound: &server.PlaySound{},
+	interfaces.QuestFetchResponse: &server.QuestFetchResponse{},
+	interfaces.QuestObjectId: &server.QuestObjectId{},
+	interfaces.QuestRedeemResponse: &server.QuestRedeemResponse{},
+	interfaces.Queue: &server.Queue{},
+	interfaces.RealmScoreUpdate: &server.RealmScoreUpdate{},
+	interfaces.Reconnect: &server.Reconnect{},
+	interfaces.RefineResult: &server.RefineResult{},
+	interfaces.ResetDailyQuests: &server.ResetDailyQuests{},
+	interfaces.ServerPlayerShoot: &server.ServerPlayerShoot{},
+	interfaces.ShowEffect: &server.ShowEffect{},
+	interfaces.SkinRecycleResponse: &server.SkinRecycleResponse{},
+	interfaces.Text: &server.Text{},
+	interfaces.TradeAccepted: &server.TradeAccepted{},
+	interfaces.TradeChanged: &server.TradeChanged{},
+	interfaces.TradeDone: &server.TradeDone{},
+	interfaces.TradeRequested: &server.TradeRequested{},
+	interfaces.TradeStart: &server.TradeStart{},
+	interfaces.UnlockCustomization: &server.UnlockCustomization{},
+	interfaces.UnlockNewSlot: &server.UnlockNewSlot{},
+	interfaces.Update: &server.Update{},
+	interfaces.VaultContent: &server.VaultContent{},
+}
+
 // registerPacketHandlers sets up handlers for different packet types
 func (c *Client) registerPacketHandlers() {
-	c.packetHandler.RegisterHandler(int(interfaces.MapInfo), func(data []byte) error {
-		packet := &server.MapInfo{}
-		c.rc4.Decrypt(data)
-		reader := packets.NewPacketReader(data)
-		packet.Read(reader)
-		c.logger.Info("Client", "MapInfo: %v", packet)
+	c.packetHandler.RegisterHandler(int(interfaces.MapInfo), func(packet packets.Packet) error {
+		mapInfo := packet.(*server.MapInfo)
+		//todo: send load or create
+		c.logger.Info("Client", "MapInfo: %v", mapInfo)
 		return nil
 	})
 
 	// Handle AoE packets
-	c.packetHandler.RegisterHandler(int(interfaces.AOE), func(data []byte) error {
-		packet := &server.AOE{}
-		// TODO: Implement packet decoding
-		if packet.Location != nil && c.state.WorldPos != nil {
+	c.packetHandler.RegisterHandler(int(interfaces.AOE), func(packet packets.Packet) error {
+		aoe := packet.(*server.AOE)
+		if aoe.Location != nil && c.state.WorldPos != nil {
 			// Convert Location to WorldPosData for distance calculation
-			packetPos := &WorldPosData{X: float32(packet.Location.X), Y: float32(packet.Location.Y)}
-			if packetPos.SquareDistanceTo(c.state.WorldPos) < packet.Radius*packet.Radius {
+			packetPos := &WorldPosData{X: float32(aoe.Location.X), Y: float32(aoe.Location.Y)}
+			if packetPos.SquareDistanceTo(c.state.WorldPos) < aoe.Radius*aoe.Radius {
 				// Apply AoE damage
-				c.applyDamage(int32(packet.Damage), packet.ArmorPierce)
+				c.applyDamage(int32(aoe.Damage), aoe.ArmorPierce)
 			}
 		}
 		return nil
 	})
 
 	// Handle enemy shoot packets
-	c.packetHandler.RegisterHandler(int(interfaces.EnemyShoot), func(data []byte) error {
-		packet := &server.EnemyShoot{}
+	c.packetHandler.RegisterHandler(int(interfaces.EnemyShoot), func(packet packets.Packet) error {
+		enemyShoot := packet.(*server.EnemyShoot)
 		// TODO: Implement packet decoding
-		if enemy, ok := c.enemies[packet.OwnerId]; ok && !enemy.IsDead() {
+		if enemy, ok := c.enemies[enemyShoot.OwnerId]; ok && !enemy.IsDead() {
 			// Convert Location to WorldPosData
-			startPos := &WorldPosData{X: float32(packet.Location.X), Y: float32(packet.Location.Y)}
-			for i := byte(0); i < packet.NumShots; i++ {
-				angle := packet.Angle + float32(i)*packet.AngleInc
-				c.addProjectile(int32(packet.BulletType), packet.OwnerId, int32(packet.BulletId)+int32(i), angle, startPos)
+			startPos := &WorldPosData{X: float32(enemyShoot.Location.X), Y: float32(enemyShoot.Location.Y)}
+			for i := byte(0); i < enemyShoot.NumShots; i++ {
+				angle := enemyShoot.Angle + float32(i)*enemyShoot.AngleInc
+				c.addProjectile(int32(enemyShoot.BulletType), enemyShoot.OwnerId, int32(enemyShoot.BulletId)+int32(i), angle, startPos)
 			}
 		}
 		return nil
 	})
 
 	// Handle new tick packets
-	c.packetHandler.RegisterHandler(int(interfaces.NewTick), func(data []byte) error {
-		packet := &server.NewTick{}
+	c.packetHandler.RegisterHandler(int(interfaces.NewTick), func(packet packets.Packet) error {
+		newTick := packet.(*server.NewTick)
 		// TODO: Implement packet decoding
 		c.state.LastFrameTime = time.Now().UnixNano() / int64(time.Millisecond)
 
 		// Process statuses
-		for _, status := range packet.Statuses {
+		for _, status := range newTick.Statuses {
 			if int32(status.ObjectID) == c.state.ObjectID {
 				if status.Position != nil {
 					// Convert Position to WorldPosData
@@ -444,19 +514,18 @@ func (c *Client) registerPacketHandlers() {
 	})
 
 	// Handle update packets
-	c.packetHandler.RegisterHandler(int(interfaces.Update), func(data []byte) error {
-		packet := &server.Update{}
-		// TODO: Implement packet decoding
+	c.packetHandler.RegisterHandler(int(interfaces.Update), func(packet packets.Packet) error {
+		update := packet.(*server.Update)
 
 		// Process new objects
-		for _, entity := range packet.NewObjs {
+		for _, entity := range update.NewObjs {
 			// Handle entity based on its properties
 			// This will need to be adjusted based on the actual structure of Entity
 			c.handleNewObject(entity)
 		}
 
 		// Process dropped objects
-		for _, objID := range packet.Drops {
+		for _, objID := range update.Drops {
 			delete(c.enemies, objID)
 			delete(c.players, objID)
 		}
@@ -464,25 +533,24 @@ func (c *Client) registerPacketHandlers() {
 	})
 
 	// Handle text packets
-	c.packetHandler.RegisterHandler(int(interfaces.Text), func(data []byte) error {
-		packet := &server.Text{}
-		// TODO: Implement packet decoding
+	c.packetHandler.RegisterHandler(int(interfaces.Text), func(packet packets.Packet) error {
+		text := packet.(*server.Text)
 
-		// Handle chat messages based on the Text packet
-		c.handleChatMessage(packet)
+		c.logger.Info("Client", "Text: <%s> %v", text.Name, text.RawText)
+		
 		return nil
 	})
 
 	// Handle failure packets
-	c.packetHandler.RegisterHandler(int(interfaces.Failure), func(data []byte) error {
-		packet := &server.Failure{}
-		// TODO: Implement packet decoding
-		switch packet.ErrorId {
+	c.packetHandler.RegisterHandler(int(interfaces.Failure), func(packet packets.Packet) error {
+		failure := packet.(*server.Failure)
+		
+		switch failure.ErrorId {
 		case int32(4): // IncorrectVersion
 			c.logger.Info("Client", "Build version out of date. Updating and reconnecting...")
 			// Update build version in config and state
 			//todo: probably don't do this...
-			c.config.BuildVersion = packet.ErrorMessage
+			c.config.BuildVersion = failure.ErrorMessage
 			// Save updated config
 			if err := config.SaveConfig("config.json", c.config); err != nil {
 				c.logger.Error("Client", "Failed to save updated build version: %v", err)
@@ -499,42 +567,34 @@ func (c *Client) registerPacketHandlers() {
 			c.logger.Info("Client", "Character not found. Creating new character...")
 			// TODO: Handle character creation
 		default:
-			c.logger.Error("Client", "Received failure %d: %s", packet.ErrorId, packet.ErrorMessage)
+			c.logger.Error("Client", "Received failure %d: %s", failure.ErrorId, failure.ErrorMessage)
 		}
 		return nil
 	})
 
 	// Handle goto packets
-	c.packetHandler.RegisterHandler(int(interfaces.Goto), func(data []byte) error {
-		packet := &server.Goto{}
+	c.packetHandler.RegisterHandler(int(interfaces.Goto), func(packet packets.Packet) error {
+		gotoPacket := &server.Goto{}
 		// TODO: Implement packet decoding
 
 		// Create and send acknowledgment
-		ack := client.NewGotoAck()
-		ack.Time = int32(c.state.LastFrameTime)
-		ack.Unknown = false
+		gotoAck := client.NewGotoAck()
+		gotoAck.Time = int32(c.state.LastFrameTime)
+		gotoAck.Unknown = false
 
-		if err := c.send(ack); err != nil {
+		if err := c.send(gotoAck); err != nil {
 			c.logger.Error("Client", "Failed to send GotoAck: %v", err)
 		}
 
-		if packet.ObjectId == c.state.ObjectID {
+		if gotoPacket.ObjectId == c.state.ObjectID {
 			// Convert Location to WorldPosData
-			pos := &WorldPosData{X: float32(packet.Location.X), Y: float32(packet.Location.Y)}
+			pos := &WorldPosData{X: float32(gotoPacket.Location.X), Y: float32(gotoPacket.Location.Y)}
 			c.state.WorldPos = pos
-			c.emit(events.EventPlayerMove, packet, &events.PlayerEventData{
+			c.emit(events.EventPlayerMove, gotoPacket, &events.PlayerEventData{
 				PlayerData: c.state.PlayerData,
 				Position:   c.state.WorldPos,
 			})
 		}
-		return nil
-	})
-
-	// Handle player shoot
-	c.packetHandler.RegisterHandler(int(interfaces.PlayerShoot), func(data []byte) error {
-		packet := client.NewPlayerShoot()
-		// TODO: Implement packet decoding
-		c.emit(events.EventPlayerShoot, packet, nil)
 		return nil
 	})
 }
@@ -625,14 +685,6 @@ func (c *Client) handleNewObject(obj interface{}) {
 	// TODO: Implement object handling based on type
 }
 
-func (c *Client) handlePrivateMessage(packet interface{}) {
-	// TODO: Implement private message handling
-}
-
-func (c *Client) handleChatMessage(packet interface{}) {
-	// TODO: Implement chat message handling
-}
-
 // GetState returns the current game state
 func (c *Client) GetState() *GameState {
 	c.mu.Lock()
@@ -704,78 +756,49 @@ func (c *Client) handlePackets() {
 			c.logger.Error("Client", "Failed to set read deadline: %v", err)
 			return
 		}
-
-		// First read the packet length (4 bytes) and packet ID (1 byte)
+				
+		// Read packet header
 		header := make([]byte, 5)
-		if _, err := io.ReadFull(c.conn, header); err != nil {
-			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				c.logger.Warning("Client", "Read timeout, attempting to reconnect...")
-				c.reconnect()
-				return
-			}
-
-			if err == io.EOF || strings.Contains(err.Error(), "connection reset by peer") ||
-				strings.Contains(err.Error(), "forcibly closed") {
-				c.logger.Warning("Client", "Connection closed by server, attempting to reconnect...")
-				c.reconnect()
-				return
-			}
-
-			c.logger.Error("Client", "Error reading packet header: %v", err)
+		if _, err := c.conn.Read(header); err != nil {
+			c.logger.Error("Client", "Failed to read packet header: %v", err)
 			return
 		}
 
-		// Extract packet length and ID
-		packetLength := int(binary.BigEndian.Uint32(header[:4]))
-		packetID := header[4]
-
-		// Validate packet length
-		//todo: dynamically adjust buffer size if too big
-		if packetLength <= 5 || packetLength > 100000 {
-			c.logger.Error("Client", "Invalid packet length: %d", packetLength)
-			continue
-		}
-
-		// Read the rest of the packet
-		payloadLength := packetLength - 5
-		payload := make([]byte, payloadLength)
-		if _, err := io.ReadFull(c.conn, payload); err != nil {
-			c.logger.Error("Client", "Error reading packet payload: %v", err)
+		// Convert 4 bytes to int32 length as big endian
+		packetLength := int32(binary.BigEndian.Uint32(header[0:4]))
+		packetId := header[4]
+		
+		// Read packet data
+		packetData := make([]byte, packetLength - 5)
+		if _, err := c.conn.Read(packetData); err != nil {
+			c.logger.Error("Client", "Failed to read packet data: %v", err)
 			return
 		}
 
-		// Make a copy of the payload for decryption
-		decryptedPayload := make([]byte, payloadLength)
-		copy(decryptedPayload, payload)
-
-		// Decrypt only the payload if RC4 is initialized
-		if c.rc4 != nil {
-			c.rc4.Decrypt(decryptedPayload)
-		} else {
-			c.logger.Warning("Client", "RC4 not initialized, processing raw data")
-		}
-
-		// Log packet details
-		c.logger.Debug("Client", "Received packet - ID: %d, Length: %d bytes", packetID, packetLength)
-		//wtf is this?
-		if payloadLength > 0 {
-			maxBytes := 16
-			if payloadLength < maxBytes {
-				maxBytes = payloadLength
-			}
-			c.logger.Debug("Client", "Encrypted payload (first %d bytes): % x", maxBytes, payload[:maxBytes])
-			c.logger.Debug("Client", "Decrypted payload (first %d bytes): % x", maxBytes, decryptedPayload[:maxBytes])
-		}
-
-		// If we have a version manager, try to get the packet name
-		if c.versionMgr != nil {
-			if packetName, err := c.versionMgr.GetPacketName(int(packetID)); err == nil {
-				c.logger.Debug("Client", "Packet type: %s", packetName)
-			}
-		}
-
+		// Decrypt packet data
+		c.rc4.Decrypt(packetData)
+		
+		//log packet data
+		//c.logger.Info("Client", "Received packet ID: %d, data: %v", packetId, hex.EncodeToString(packetData))
+		
+		
+		/*
+		interfaces.MapInfo
+		c.packetHandler.RegisterHandler(int(interfaces.MapInfo), func(data []byte) error {
+			packet := &server.MapInfo{}
+			reader := packets.NewPacketReader(data)
+			packet.Read(reader)
+			c.logger.Info("Client", "MapInfo: %v", packet)
+			return nil
+		})
+		*/
+		
+		packet := packetTypes[interfaces.PacketType(packetId)]
+		reader := packets.NewPacketReader(packetData)
+		packet.Read(reader)
+		
 		// Process the decrypted packet
-		if err := c.packetHandler.HandlePacket(int(packetID), decryptedPayload); err != nil {
+		if err := c.packetHandler.HandlePacket(int(packetId), packet); err != nil {
 			c.logger.Error("Client", "Error handling packet: %v", err)
 			// Don't return on packet handling errors, continue processing other packets
 		}

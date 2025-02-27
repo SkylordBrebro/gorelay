@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"gorelay/pkg/packets/interfaces"
@@ -31,4 +31,8 @@ func (p *MultipleMissionsProgressUpdate) Read(r interfaces.Reader) error {
 func (p *MultipleMissionsProgressUpdate) Write(w interfaces.Writer) error {
 	// Write UnknownString
 	return w.WriteString(p.UnknownString)
+}
+
+func (p *MultipleMissionsProgressUpdate) ID() int32 {
+	return int32(interfaces.MultipleMissionsProgressUpdate)
 }

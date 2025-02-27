@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"gorelay/pkg/packets/interfaces"
@@ -88,4 +88,8 @@ func (p *UnlockCustomization) Write(w interfaces.Writer) error {
 	}
 
 	return nil
+}
+
+func (p *UnlockCustomization) ID() int32 {
+	return int32(interfaces.UnlockCustomization)
 }

@@ -12,9 +12,9 @@ type Packet interface {
 	ID() int32
 	Read(r interfaces.Reader) error
 	Write(w interfaces.Writer) error
-	String() string
-	HasNulls() bool
-	Structure() string
+	//todo: implement... both these could maybe be done via reflection in Packet here
+	//String() string
+	//Structure() string
 }
 
 // BasePacket represents a base network packet

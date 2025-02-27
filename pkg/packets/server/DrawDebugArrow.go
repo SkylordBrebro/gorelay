@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"gorelay/pkg/packets/interfaces"
@@ -36,7 +36,6 @@ func (l *Location) Write(w interfaces.Writer) error {
 
 // DrawDebugArrow represents the server packet for debug arrow drawing
 type DrawDebugArrow struct {
-	ID       uint32
 	StartLoc Location
 	EndLoc   Location
 	Lifetime float32
@@ -51,12 +50,6 @@ func (p *DrawDebugArrow) Type() interfaces.PacketType {
 // Read reads the packet data from the provided reader
 func (p *DrawDebugArrow) Read(r interfaces.Reader) error {
 	var err error
-
-	// Read ID
-	p.ID, err = r.ReadUInt32()
-	if err != nil {
-		return err
-	}
 
 	// Read StartLoc
 	p.StartLoc, err = NewLocation(r)
@@ -89,12 +82,6 @@ func (p *DrawDebugArrow) Read(r interfaces.Reader) error {
 func (p *DrawDebugArrow) Write(w interfaces.Writer) error {
 	var err error
 
-	// Write ID
-	err = w.WriteUInt32(p.ID)
-	if err != nil {
-		return err
-	}
-
 	// Write StartLoc
 	err = p.StartLoc.Write(w)
 	if err != nil {
@@ -120,4 +107,8 @@ func (p *DrawDebugArrow) Write(w interfaces.Writer) error {
 	}
 
 	return nil
+}
+
+func (p *DrawDebugArrow) ID() int32 {
+	return int32(interfaces.DrawDebugArrow)
 }

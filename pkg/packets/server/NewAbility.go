@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"gorelay/pkg/packets/interfaces"
@@ -24,4 +24,8 @@ func (p *NewAbility) Read(r interfaces.Reader) error {
 // Write writes the packet data to the provided writer
 func (p *NewAbility) Write(w interfaces.Writer) error {
 	return w.WriteInt32(p.AbilityType)
+}
+
+func (p *NewAbility) ID() int32 {
+	return int32(interfaces.NewAbility)
 }
