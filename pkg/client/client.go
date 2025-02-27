@@ -2,6 +2,7 @@ package client
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"math"
@@ -256,8 +257,14 @@ func (c *Client) Connect() error {
 	}
 
 	// Initialize RC4 encryption
-	inKey := []byte("c91d9eec420160730d825604e0")
-	outKey := []byte("5a4d2016bc16dc64883194ffd9")
+	inKey, err := hex.DecodeString("c91d9eec420160730d825604e0")
+	if err != nil {
+		return fmt.Errorf("failed to decode inKey: %v", err)
+	}
+	outKey, err := hex.DecodeString("5a4d2016bc16dc64883194ffd9")
+	if err != nil {
+		return fmt.Errorf("failed to decode outKey: %v", err)
+	}
 	rc4Manager, err := crypto.NewRC4Manager(inKey, outKey)
 	if err != nil {
 		return fmt.Errorf("failed to initialize RC4: %v", err)
@@ -309,7 +316,8 @@ func (c *Client) Connect() error {
 		hello.ClientToken = c.accountInfo.HwidToken
 		hello.ClientIdentification = "XQpu8CWkMehb5rLVP3DG47FcafExRUvg"
 
-		c.logger.Info("Client", "Sending Hello packet: %s", hello.ToString())
+		c.logger.Info("Client", "Sending Hello")
+		//c.logger.Info("Client", "Sending Hello packet: %s", hello.ToString())
 
 		writer := packets.NewPacketWriter()
 		hello.Write(writer)
@@ -319,10 +327,10 @@ func (c *Client) Connect() error {
 		header.WriteByte(byte(interfaces.Hello))
 		header.WriteBytes(writer.Bytes())
 		encoded := header.Bytes()
-		c.logger.Info("Client", "Pre-ciphered Hello: % x", header.Bytes())
+		//c.logger.Info("Client", "Pre-ciphered Hello: % x", header.Bytes())
 		rc4Manager.Encrypt(encoded)
 		
-		c.logger.Info("Client", "Post-ciphered Hello: % x", header.Bytes())
+		//c.logger.Info("Client", "Post-ciphered Hello: % x", header.Bytes())
 		
 		if _, err := c.conn.Write(header.Bytes()); err != nil {
 			c.logger.Error("Client", "Failed to send Hello packet: %v", err)

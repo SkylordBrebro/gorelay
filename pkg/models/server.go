@@ -90,8 +90,9 @@ func FetchServers(guid string, password string) (ServerList, error) {
 	}
 
 	// Log the response body for debugging
-	fmt.Printf("Response status: %s\n", resp.Status)
-	fmt.Printf("Response body: %s\n", string(body))
+	fmt.Printf("Got server list")
+	//fmt.Printf("Response status: %s\n", resp.Status)
+	//fmt.Printf("Response body: %s\n", string(body))
 
 	// Check for common error responses
 	responseStr := string(body)
