@@ -2,11 +2,11 @@ package account
 
 import (
 	"crypto"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -16,15 +16,15 @@ import (
 
 // Account represents a game account
 type Account struct {
-	GUID        string    `json:"guid"`
-	Email       string    `json:"email"`
-	Password    string    `json:"password"`
-	Alias       string    `json:"alias"`
-	ServerPref  string    `json:"serverPref"`
-	CharID      int32     `json:"charId"`
-	LastVerify  time.Time `json:"lastVerify"`
-	Reconnect   bool      `json:"-"` // Used to signal manual reconnection
-	HwidToken   string    `json:"hwidToken"`
+	GUID       string    `json:"guid"`
+	Email      string    `json:"email"`
+	Password   string    `json:"password"`
+	Alias      string    `json:"alias"`
+	ServerPref string    `json:"serverPref"`
+	CharID     int32     `json:"charId"`
+	LastVerify time.Time `json:"lastVerify"`
+	Reconnect  bool      `json:"-"` // Used to signal manual reconnection
+	HwidToken  string    `json:"hwidToken"`
 
 	// Additional fields from C# implementation
 	Banned                bool               `json:"banned"`
@@ -211,9 +211,12 @@ func LoadAccounts(path string) (*AccountManager, error) {
 		if acc.Email == "" && acc.GUID != "" {
 			acc.Email = acc.GUID
 		}
-		//todo: FIX
-		log.Println("clientToken: " + string(crypto.SHA1.New().Sum([]byte(acc.Email))))
-		acc.HwidToken = "b968bea6009e5d3971927d2738d329f4ea287b25"
+
+		// Generate deterministic HWID using SHA1 of email
+		hasher := crypto.SHA1.New()
+		hasher.Write([]byte(acc.Email))
+		acc.HwidToken = hex.EncodeToString(hasher.Sum(nil))
+
 		// If GUID is empty but Email is set, use Email as GUID
 		if acc.GUID == "" && acc.Email != "" {
 			acc.GUID = acc.Email
