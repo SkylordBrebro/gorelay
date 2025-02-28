@@ -26,7 +26,7 @@ func main() {
 	// Parse command line flags
 	configPath := flag.String("config", "config.json", "Path to config file")
 	accountsPath := flag.String("accounts", "accounts.json", "Path to accounts file")
-	xmldata.LoadAssets()
+	
 	debug := flag.Bool("debug", false, "Enable debug logging")
 	flag.Parse()
 
@@ -69,28 +69,9 @@ func main() {
 		if err := config.SaveConfig(*configPath, cfg); err != nil {
 			log.Fatalf("Failed to save config: %v", err)
 		}
-	} else {
-		//no update, load xmls from files
-		files, err := os.ReadDir("Xml")
-		if err != nil {
-			log.Fatalf("Failed to read Xml directory: %v", err)
-		}
-
-		for _, file := range files {
-			if !strings.HasSuffix(file.Name(), ".xml") {
-				continue
-			}
-
-			content, err := os.ReadFile("Xml/" + file.Name())
-			if err != nil {
-				log.Fatalf("Failed to read XML file %s: %v", file.Name(), err)
-			}
-
-			// Remove .xml extension to get the name
-			name := strings.TrimSuffix(file.Name(), ".xml")
-			xmldata.StoreXML(name, string(content))
-		}
-	}
+	} 
+	
+	xmldata.LoadAssets()
 
 	// Initialize logger
 	logger, err := logger.New("gorelay.log", *debug || cfg.Debug)
