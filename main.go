@@ -26,6 +26,7 @@ func main() {
 	// Parse command line flags
 	configPath := flag.String("config", "config.json", "Path to config file")
 	accountsPath := flag.String("accounts", "accounts.json", "Path to accounts file")
+	xmldata.LoadAssets()
 	debug := flag.Bool("debug", false, "Enable debug logging")
 	flag.Parse()
 
