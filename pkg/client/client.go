@@ -452,8 +452,23 @@ var packetTypes = map[interfaces.PacketType]packets.Packet{
 func (c *Client) registerPacketHandlers() {
 	c.packetHandler.RegisterHandler(int(interfaces.MapInfo), func(packet packets.Packet) error {
 		mapInfo := packet.(*server.MapInfo)
-		//todo: send load or create
 		c.logger.Info("Client", "MapInfo: %v", mapInfo)
+		
+		if c.accountInfo.Chars.Characters != nil && len(c.accountInfo.Chars.Characters) > 0 {
+			load := client.NewLoad()
+			load.CharacterID = int32(c.accountInfo.Chars.Characters[0].ID)
+			c.send(load)
+			c.logger.Info("Client", "Loading character %d", load.CharacterID)
+		} else {
+			create := client.NewCreate()
+			create.ClassType = 768 //wizard
+			create.SkinType = 0
+			create.IsChallenger = false
+			create.IsSeasonal = false
+			c.send(create)
+			c.logger.Info("Client", "Creating character")
+		}
+		
 		return nil
 	})
 
