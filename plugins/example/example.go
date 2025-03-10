@@ -66,3 +66,22 @@ func (p *ExamplePlugin) OnNewTick(packet *server.NewTick) {
 func (p *ExamplePlugin) OnUpdate(packet *server.Update) {
 	// We'll leave this empty to avoid spam
 }
+
+// OnPlayerShoot is called when a PlayerShoot packet is received
+func (p *ExamplePlugin) OnPlayerShoot(packet *server.AllyShoot) {
+	// Log player shooting events if needed
+	p.client.GetLogger().Debug("HelloWorld", "Player shot projectile: ID=%d, ContainerType=%d",
+		packet.BulletId, packet.ContainerType)
+}
+
+// OnText is called when a Text packet is received
+func (p *ExamplePlugin) OnText(packet *server.Text) {
+	p.client.GetLogger().Info("HelloWorld", "<%s> %s", packet.Name, packet.RawText)
+}
+
+// OnUnknownPacket is called when an unknown packet is received
+func (p *ExamplePlugin) OnUnknownPacket(packetID int, data []byte) {
+	// Log unknown packets for debugging
+	p.client.GetLogger().Debug("HelloWorld", "Received unknown packet ID %d with %d bytes",
+		packetID, len(data))
+}

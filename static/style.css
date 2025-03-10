@@ -1,0 +1,68 @@
+
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f0f0f0;
+}
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+.client-box {
+    background-color: white;
+    border-radius: 5px;
+    padding: 15px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.client-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.client-name {
+    font-size: 18px;
+    font-weight: bold;
+}
+.client-status {
+    padding: 5px 10px;
+    border-radius: 3px;
+    font-size: 14px;
+}
+.status-online {
+    background-color: #4CAF50;
+    color: white;
+}
+.status-offline {
+    background-color: #f44336;
+    color: white;
+}
+.client-details {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.detail-item {
+    background-color: #f8f9fa;
+    padding: 8px;
+    border-radius: 3px;
+}
+.log-box {
+    background-color: #1e1e1e;
+    color: #d4d4d4;
+    padding: 10px;
+    border-radius: 3px;
+    max-height: 200px;
+    overflow-y: auto;
+    font-family: monospace;
+}
+.log-entry {
+    margin: 2px 0;
+    padding: 2px 5px;
+}
+.log-info { color: #569cd6; }
+.log-warning { color: #dcdcaa; }
+.log-error { color: #f44747; }

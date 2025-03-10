@@ -14,6 +14,13 @@ import (
 	"time"
 )
 
+// CharInfo represents character information
+type CharInfo struct {
+	CharID      int32 `json:"charId"`
+	NextCharID  int32 `json:"nextCharId"`
+	MaxNumChars int32 `json:"maxNumChars"`
+}
+
 // Account represents a game account
 type Account struct {
 	GUID       string    `json:"guid"`
@@ -21,7 +28,7 @@ type Account struct {
 	Password   string    `json:"password"`
 	Alias      string    `json:"alias"`
 	ServerPref string    `json:"serverPref"`
-	CharID     int32     `json:"charId"`
+	CharInfo   *CharInfo `json:"charInfo"`
 	LastVerify time.Time `json:"lastVerify"`
 	Reconnect  bool      `json:"-"` // Used to signal manual reconnection
 	HwidToken  string    `json:"hwidToken"`
@@ -277,8 +284,8 @@ func (am *AccountManager) UpdateAccount(account *Account) bool {
 	return false
 }
 
-// VerifyAccount performs account verification and gets access token
-func (a *Account) VerifyAccount(hwidToken string) error {
+// verify performs account verification and gets access token
+func (a *Account) verify(hwidToken string) error {
 	// Work with a temp copy of the email for replacements/encodes
 	tempEmail := a.Email
 	if strings.HasPrefix(tempEmail, "steamworks") || strings.HasPrefix(tempEmail, "kongregate") {
@@ -324,8 +331,23 @@ func (a *Account) VerifyAccount(hwidToken string) error {
 
 	// Update account with access token
 	a.AccessToken = verifyResp.AccessToken
-	a.LastVerify = time.Now()
+	return nil
+}
 
+// VerifyAccount performs account verification and gets access token
+func (a *Account) VerifyAccount(hwidToken string) error {
+	// Verify account and get access token
+	if err := a.verify(hwidToken); err != nil {
+		return fmt.Errorf("failed to verify account: %v", err)
+	}
+
+	// Always fetch character list after verification
+	if err := a.GetCharList(); err != nil {
+		return fmt.Errorf("failed to get character list: %v", err)
+	}
+
+	// Update last verify time
+	a.LastVerify = time.Now()
 	return nil
 }
 
@@ -369,7 +391,7 @@ func (a *Account) GetCharList() error {
 
 	// Update character ID if characters exist
 	if len(charListResp.Chars) > 0 {
-		a.CharID = charListResp.Chars[0].ID
+		a.CharInfo.CharID = charListResp.Chars[0].ID
 	}
 
 	return nil

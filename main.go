@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -26,7 +25,7 @@ func main() {
 	// Parse command line flags
 	configPath := flag.String("config", "config.json", "Path to config file")
 	accountsPath := flag.String("accounts", "accounts.json", "Path to accounts file")
-	
+
 	debug := flag.Bool("debug", false, "Enable debug logging")
 	flag.Parse()
 
@@ -69,8 +68,8 @@ func main() {
 		if err := config.SaveConfig(*configPath, cfg); err != nil {
 			log.Fatalf("Failed to save config: %v", err)
 		}
-	} 
-	
+	}
+
 	xmldata.LoadAssets()
 
 	// Initialize logger

@@ -1,0 +1,27 @@
+/* Basic styles for testing static file serving */
+:root {
+    --bg-color: #1a1a1a;
+    --card-bg: #2d2d2d;
+    --text-color: #e0e0e0;
+    --accent-color: #3a3a3a;
+    --border-color: #404040;
+    --success-color: #4caf50;
+    --error-color: #f44336;
+    --info-color: #2196f3;
+    --warning-color: #ff9800;
+}
+
+body { 
+    font-family: 'Consolas', monospace;
+    margin: 20px;
+    background: var(--bg-color);
+    color: var(--text-color);
+}
+
+.test-static {
+    padding: 10px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    margin: 10px 0;
+} 

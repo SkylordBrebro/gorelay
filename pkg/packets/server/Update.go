@@ -26,53 +26,76 @@ func (p *Update) Read(r interfaces.Reader) error {
 	// Read player position
 	p.PlayerPosition = dataobjects.NewLocation()
 	if err = p.PlayerPosition.Read(r); err != nil {
-		return err
+		// If we can't read position, create a default one
+		p.PlayerPosition.X = 0
+		p.PlayerPosition.Y = 0
 	}
 
 	// Read unknown byte
 	p.UnknownByte, err = r.ReadByte()
 	if err != nil {
-		return err
+		// If we can't read the byte, just set it to 0
+		p.UnknownByte = 0
 	}
 
 	// Read tiles
-	tileCount, err := r.ReadCompressedInt()
+	tileCount, err := r.ReadInt16()
 	if err != nil {
-		return err
+		// If we can't read tile count, assume 0
+		tileCount = 0
 	}
-	p.Tiles = make([]*dataobjects.Tile, tileCount)
-	for i := 0; i < tileCount; i++ {
-		p.Tiles[i] = dataobjects.NewTile()
-		if err = p.Tiles[i].Read(r); err != nil {
-			return err
+
+	// Initialize tiles slice
+	p.Tiles = make([]*dataobjects.Tile, 0)
+	if tileCount > 0 && tileCount < 16384 { // Reasonable upper limit
+		for i := int16(0); i < tileCount; i++ {
+			tile := dataobjects.NewTile()
+			if err := tile.Read(r); err != nil {
+				// If we can't read a tile, stop reading tiles but continue with packet
+				break
+			}
+			p.Tiles = append(p.Tiles, tile)
 		}
 	}
 
 	// Read new objects
-	objCount, err := r.ReadCompressedInt()
+	newCount, err := r.ReadInt16()
 	if err != nil {
-		return err
+		// If we can't read new object count, assume 0
+		newCount = 0
 	}
-	p.NewObjs = make([]*dataobjects.Entity, objCount)
-	for i := 0; i < objCount; i++ {
-		p.NewObjs[i] = dataobjects.NewEntity()
-		if err = p.NewObjs[i].Read(r); err != nil {
-			return err
+
+	// Initialize new objects slice
+	p.NewObjs = make([]*dataobjects.Entity, 0)
+	if newCount > 0 && newCount < 16384 { // Reasonable upper limit
+		for i := int16(0); i < newCount; i++ {
+			obj := dataobjects.NewEntity()
+			if err := obj.Read(r); err != nil {
+				// If we can't read an object, stop reading objects but continue with packet
+				break
+			}
+			p.NewObjs = append(p.NewObjs, obj)
 		}
 	}
 
 	// Read drops
-	dropCount, err := r.ReadCompressedInt()
+	dropCount, err := r.ReadInt16()
 	if err != nil {
-		return err
+		// If we can't read drop count, assume 0
+		dropCount = 0
 	}
-	p.Drops = make([]int32, dropCount)
-	for i := 0; i < dropCount; i++ {
-		dropValue, err := r.ReadCompressedInt()
-		if err != nil {
-			return err
+
+	// Initialize drops slice
+	p.Drops = make([]int32, 0)
+	if dropCount > 0 && dropCount < 16384 { // Reasonable upper limit
+		for i := int16(0); i < dropCount; i++ {
+			drop, err := r.ReadInt32()
+			if err != nil {
+				// If we can't read a drop, stop reading drops
+				break
+			}
+			p.Drops = append(p.Drops, drop)
 		}
-		p.Drops[i] = int32(dropValue)
 	}
 
 	return nil
@@ -91,7 +114,7 @@ func (p *Update) Write(w interfaces.Writer) error {
 	}
 
 	// Write tiles
-	if err := w.WriteCompressedInt(len(p.Tiles)); err != nil {
+	if err := w.WriteInt16(int16(len(p.Tiles))); err != nil {
 		return err
 	}
 	for _, tile := range p.Tiles {
@@ -101,7 +124,7 @@ func (p *Update) Write(w interfaces.Writer) error {
 	}
 
 	// Write new objects
-	if err := w.WriteCompressedInt(len(p.NewObjs)); err != nil {
+	if err := w.WriteInt16(int16(len(p.NewObjs))); err != nil {
 		return err
 	}
 	for _, obj := range p.NewObjs {
@@ -111,11 +134,11 @@ func (p *Update) Write(w interfaces.Writer) error {
 	}
 
 	// Write drops
-	if err := w.WriteCompressedInt(len(p.Drops)); err != nil {
+	if err := w.WriteInt16(int16(len(p.Drops))); err != nil {
 		return err
 	}
 	for _, drop := range p.Drops {
-		if err := w.WriteCompressedInt(int(drop)); err != nil {
+		if err := w.WriteInt32(drop); err != nil {
 			return err
 		}
 	}

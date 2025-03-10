@@ -58,6 +58,11 @@ func (pr *PacketReader) ReadString() (string, error) {
 		return "", err
 	}
 
+	// Validate length to prevent negative or excessively large allocations
+	if length < 0 || length > 16384 { // 16KB is a reasonable maximum for strings
+		return "", nil
+	}
+
 	data := make([]byte, length)
 	_, err = io.ReadFull(pr.reader, data)
 	if err != nil {
@@ -72,6 +77,11 @@ func (pr *PacketReader) ReadUTF32String() (string, error) {
 	length, err := pr.ReadInt32()
 	if err != nil {
 		return "", err
+	}
+
+	// Validate length to prevent negative or excessively large allocations
+	if length < 0 || length > 16384 { // 16KB is a reasonable maximum for strings
+		return "", nil
 	}
 
 	data := make([]byte, length)

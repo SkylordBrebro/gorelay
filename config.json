@@ -1,6 +1,6 @@
 {
-  "buildHash": "b5d0f9c562c6b513df8e262e3e281c7a",
-  "buildVersion": "5.8.0.0.0",
+  "buildHash": "a3cf6c5a134e0f0c95f52e6e3ce64a29",
+  "buildVersion": "5.8.0.1.0",
   "localServer": {
     "enabled": false,
     "port": 2050
@@ -20,8 +20,8 @@
     "password": ""
   },
   "plugins": {
-    "enabled": false,
+    "enabled": true,
     "path": "plugins",
-    "list": []
+    "list": ["ReplyPlugin.go"]
   }
 }

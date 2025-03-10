@@ -8,28 +8,39 @@ import (
 type RC4Manager struct {
 	inbound  *rc4.Cipher
 	outbound *rc4.Cipher
+	inKey    []byte
+	outKey   []byte
 }
 
 func NewRC4Manager(inKey, outKey []byte) (*RC4Manager, error) {
-	inCipher, err := rc4.NewCipher(inKey)
-	if err != nil {
+	manager := &RC4Manager{
+		inKey:  inKey,
+		outKey: outKey,
+	}
+	if err := manager.Reset(); err != nil {
 		return nil, err
 	}
-
-	outCipher, err := rc4.NewCipher(outKey)
-	if err != nil {
-		return nil, err
-	}
-
-	return &RC4Manager{
-		inbound:  inCipher,
-		outbound: outCipher,
-	}, nil
+	return manager, nil
 }
 
-// Decrypt decrypts the packet data, skipping the first 5 bytes (4 bytes length + 1 byte ID)
+// Reset reinitializes both RC4 ciphers with their original keys
+func (m *RC4Manager) Reset() error {
+	var err error
+	m.inbound, err = rc4.NewCipher(m.inKey)
+	if err != nil {
+		return err
+	}
+
+	m.outbound, err = rc4.NewCipher(m.outKey)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Decrypt decrypts the packet data
 func (m *RC4Manager) Decrypt(data []byte) {
-	// Only decrypt the payload (skip the 4-byte length and 1-byte ID)
+	// Decrypt the entire payload
 	m.inbound.XORKeyStream(data, data)
 }
 

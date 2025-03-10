@@ -1,19 +1,18 @@
 package server
 
 import (
+	"gorelay/pkg/packets/dataobjects"
 	"gorelay/pkg/packets/interfaces"
 )
 
-// AllyShoot represents a server-side ally shoot packet
+// AllyShoot represents an incoming ally shoot packet from the server
 type AllyShoot struct {
-	BulletId      uint16
+	BulletId      int32
 	OwnerId       int32
-	ContainerType int16
-	ProjPosition  int8
+	ContainerType int32
+	StartingPos   *dataobjects.Location
 	Angle         float32
-	UnknownSbyte0 int8
-	AttackType    int8
-	UnknownInt0   int32
+	Damage        int16
 }
 
 // Type returns the packet type for AllyShoot
@@ -21,15 +20,11 @@ func (p *AllyShoot) Type() interfaces.PacketType {
 	return interfaces.AllyShoot
 }
 
-// ID returns the packet ID
-func (p *AllyShoot) ID() int32 {
-	return int32(interfaces.AllyShoot)
-}
-
-// Read reads the packet data from the given reader
+// Read reads the packet data from the provided reader
 func (p *AllyShoot) Read(r interfaces.Reader) error {
 	var err error
-	p.BulletId, err = r.ReadUInt16()
+
+	p.BulletId, err = r.ReadInt32()
 	if err != nil {
 		return err
 	}
@@ -39,83 +34,69 @@ func (p *AllyShoot) Read(r interfaces.Reader) error {
 		return err
 	}
 
-	p.ContainerType, err = r.ReadInt16()
+	p.ContainerType, err = r.ReadInt32()
 	if err != nil {
 		return err
 	}
 
-	projPos, err := r.ReadByte()
+	p.StartingPos = &dataobjects.Location{}
+	err = p.StartingPos.Read(r)
 	if err != nil {
 		return err
 	}
-	p.ProjPosition = int8(projPos)
 
 	p.Angle, err = r.ReadFloat32()
 	if err != nil {
 		return err
 	}
 
-	unknownByte0, err := r.ReadByte()
+	p.Damage, err = r.ReadInt16()
 	if err != nil {
 		return err
-	}
-	p.UnknownSbyte0 = int8(unknownByte0)
-
-	attackType, err := r.ReadByte()
-	if err != nil {
-		return err
-	}
-	p.AttackType = int8(attackType)
-
-	// Check if there are 4 more bytes to read
-	if r.RemainingBytes() >= 4 {
-		p.UnknownInt0, err = r.ReadInt32()
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil
 }
 
-// Write writes the packet data to the given writer
+// Write writes the packet data to the provided writer
 func (p *AllyShoot) Write(w interfaces.Writer) error {
-	if err := w.WriteUInt16(p.BulletId); err != nil {
+	var err error
+
+	err = w.WriteInt32(p.BulletId)
+	if err != nil {
 		return err
 	}
 
-	if err := w.WriteInt32(p.OwnerId); err != nil {
+	err = w.WriteInt32(p.OwnerId)
+	if err != nil {
 		return err
 	}
 
-	if err := w.WriteInt16(p.ContainerType); err != nil {
+	err = w.WriteInt32(p.ContainerType)
+	if err != nil {
 		return err
 	}
 
-	if err := w.WriteByte(byte(p.ProjPosition)); err != nil {
+	err = p.StartingPos.Write(w)
+	if err != nil {
 		return err
 	}
 
-	if err := w.WriteFloat32(p.Angle); err != nil {
+	err = w.WriteFloat32(p.Angle)
+	if err != nil {
 		return err
 	}
 
-	if err := w.WriteByte(byte(p.UnknownSbyte0)); err != nil {
+	err = w.WriteInt16(p.Damage)
+	if err != nil {
 		return err
-	}
-
-	if err := w.WriteByte(byte(p.AttackType)); err != nil {
-		return err
-	}
-
-	// Only write the UnknownInt0 if it's not 1
-	if p.UnknownInt0 != 1 {
-		if err := w.WriteInt32(p.UnknownInt0); err != nil {
-			return err
-		}
 	}
 
 	return nil
+}
+
+func (p *AllyShoot) ID() int32 {
+	return int32(interfaces.AllyShoot)
 }
 
 // String returns a string representation of the packet
