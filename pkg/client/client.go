@@ -558,10 +558,11 @@ func (c *Client) registerPacketHandlers() {
 	c.packetHandler.RegisterHandler(int(interfaces.Ping), func(packet packets.Packet) error {
 		ping := packet.(*server.Ping)
 
-		// Create and send pong response
+		// Create and send pong response with proper time calculation
+		currentTime := time.Now().UnixMilli()
 		pong := &client.Pong{
 			Serial: ping.Serial,
-			Time:   int32(time.Now().UnixNano() / int64(time.Millisecond)),
+			Time:   int32(currentTime % (1 << 31)), // Ensure time fits in int32
 		}
 
 		if err := c.send(pong); err != nil {
@@ -840,6 +841,23 @@ func (c *Client) registerPacketHandlers() {
 				Position:   c.state.WorldPos,
 			})
 		}
+		return nil
+	})
+
+	// Handle MultipleMissionsProgressUpdate packets
+	c.packetHandler.RegisterHandler(int(interfaces.MultipleMissionsProgressUpdate), func(packet packets.Packet) error {
+		missionUpdate := packet.(*server.MultipleMissionsProgressUpdate)
+		c.logger.Debug("Client", "Received mission progress update: %s", missionUpdate.UnknownString)
+		return nil
+	})
+
+	// Handle Trade packets
+	c.packetHandler.RegisterHandler(int(interfaces.TradeRequested), func(packet packets.Packet) error {
+		trade := packet.(*server.TradeRequested)
+		c.logger.Debug("Client", "Received trade request from: %s", trade.Name)
+
+		// For now, we'll just log the trade request
+		// You can implement trade acceptance/rejection logic here if needed
 		return nil
 	})
 }
