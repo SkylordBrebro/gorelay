@@ -32,6 +32,7 @@ type Account struct {
 	LastVerify time.Time `json:"lastVerify"`
 	Reconnect  bool      `json:"-"` // Used to signal manual reconnection
 	HwidToken  string    `json:"hwidToken"`
+	Proxy      *Proxy    `json:"proxy"`
 
 	// Additional fields from C# implementation
 	Banned                bool               `json:"banned"`
@@ -86,6 +87,12 @@ type Chars struct {
 // Char represents a single character
 type Char struct {
 	ID int `json:"id" xml:"id,attr"`
+}
+
+// Proxy represents proxy configuration
+type Proxy struct {
+	Host string `json:"host"`
+	Port int    `json:"port"`
 }
 
 // TokenExpired checks if the access token has expired
@@ -387,6 +394,11 @@ func (a *Account) GetCharList() error {
 	var charListResp CharListResponse
 	if err := xml.Unmarshal(body, &charListResp); err != nil {
 		return fmt.Errorf("failed to parse char list response: %v", err)
+	}
+
+	// Initialize CharInfo if nil
+	if a.CharInfo == nil {
+		a.CharInfo = &CharInfo{}
 	}
 
 	// Update character ID if characters exist

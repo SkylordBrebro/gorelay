@@ -287,10 +287,49 @@ func (c *Client) Connect() error {
 		}
 
 		addr := fmt.Sprintf("%s:%d", c.server.Address, 2050)
-		conn, err := net.Dial("tcp", addr)
-		if err != nil {
-			lastErr = fmt.Errorf("failed to connect: %v", err)
-			continue
+		var conn net.Conn
+		var err error
+
+		// Use proxy if configured
+		if c.accountInfo != nil && c.accountInfo.Proxy != nil {
+			proxyAddr := fmt.Sprintf("%s:%d", c.accountInfo.Proxy.Host, c.accountInfo.Proxy.Port)
+			c.logger.Info("Client", "Connecting through proxy %s", proxyAddr)
+			conn, err = net.Dial("tcp", proxyAddr)
+			if err != nil {
+				lastErr = fmt.Errorf("failed to connect to proxy: %v", err)
+				continue
+			}
+
+			// Send CONNECT request to proxy
+			connectReq := fmt.Sprintf("CONNECT %s:2050 HTTP/1.1\r\nHost: %s:2050\r\n\r\n", c.server.Address, c.server.Address)
+			if _, err := conn.Write([]byte(connectReq)); err != nil {
+				conn.Close()
+				lastErr = fmt.Errorf("failed to send CONNECT request to proxy: %v", err)
+				continue
+			}
+
+			// Read proxy response
+			resp := make([]byte, 1024)
+			n, err := conn.Read(resp)
+			if err != nil {
+				conn.Close()
+				lastErr = fmt.Errorf("failed to read proxy response: %v", err)
+				continue
+			}
+
+			// Check for successful connection - accept both "200 OK" and "200 Connection established"
+			response := string(resp[:n])
+			if !strings.Contains(response, "200") {
+				conn.Close()
+				lastErr = fmt.Errorf("proxy connection failed: %s", response)
+				continue
+			}
+		} else {
+			conn, err = net.Dial("tcp", addr)
+			if err != nil {
+				lastErr = fmt.Errorf("failed to connect: %v", err)
+				continue
+			}
 		}
 
 		// Set connection timeouts
@@ -324,7 +363,6 @@ func (c *Client) Connect() error {
 		hello.ClientIdentification = "XQpu8CWkMehb5rLVP3DG47FcafExRUvg"
 
 		c.logger.Info("Client", "Sending Hello")
-		//c.logger.Info("Client", "Sending Hello packet: %s", hello.ToString())
 
 		if err := c.sendPacket(hello); err != nil {
 			c.logger.Error("Client", "Failed to send Hello packet: %v", err)

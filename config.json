@@ -1,6 +1,6 @@
 {
-  "buildHash": "a3cf6c5a134e0f0c95f52e6e3ce64a29",
-  "buildVersion": "5.8.0.1.0",
+  "buildHash": "0023e0714e90513ba1de5d07c8ae97aa",
+  "buildVersion": "5.9.0.1.0",
   "localServer": {
     "enabled": false,
     "port": 2050
@@ -9,7 +9,7 @@
   "autoNexusThreshold": 0.3,
   "autoHealThreshold": 0.6,
   "autoHealMP": 0.4,
-  "reconnectDelay": 5000,
+  "reconnectDelay": 1000,
   "safeWalk": true,
   "autoAim": true,
   "proxy": {
@@ -22,6 +22,6 @@
   "plugins": {
     "enabled": true,
     "path": "plugins",
-    "list": ["ReplyPlugin.go"]
+    "list": []
   }
 }

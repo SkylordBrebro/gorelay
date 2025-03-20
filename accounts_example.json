@@ -9,18 +9,12 @@
         "guid": "example@email.com",
         "password": "yourSecurePassword",
         "serverPref": "USWest",
-        "charInfo": {
-          "charId": 1,
-          "nextCharId": 2,
-          "maxNumChars": 2
-        },
         "proxy": {
-          "host": "proxy.example.com",
+          "host": "1.1.1.1",
           "port": 8888,
           "username": "proxyuser",
           "password": "proxypass"
-        },
-        "pathfinder": true
+        }
       }
     ],
     "info": "ADD YOUR ACCOUNT AND REMOVE _example FROM THE FILE NAME."
