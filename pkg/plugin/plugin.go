@@ -4,37 +4,26 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"plugin"
 	"strings"
 
 	"gorelay/pkg/client"
+	"gorelay/pkg/interfaces"
 	"gorelay/pkg/models"
 	"gorelay/pkg/packets"
+	"gorelay/plugins/example" // Import example plugin directly
 )
-
-// Plugin interface that must be implemented by all plugins
-type Plugin interface {
-	Name() string
-	Initialize(client *client.Client) error
-	OnEnable() error
-	OnDisable() error
-}
-
-// PacketHook represents a packet handler function
-type PacketHook func(packet packets.Packet) error
 
 // PluginInstance represents a loaded plugin
 type PluginInstance struct {
 	Name     string
-	Instance Plugin
-	client   *client.Client
+	Instance interfaces.Plugin
 }
 
 // Manager handles plugin loading and management
 type Manager struct {
 	plugins     []*PluginInstance
 	client      *client.Client
-	packetHooks map[int32][]PacketHook
+	packetHooks map[int32][]interfaces.PacketHook
 }
 
 // NewManager creates a new plugin manager
@@ -42,42 +31,45 @@ func NewManager(client *client.Client) *Manager {
 	return &Manager{
 		plugins:     make([]*PluginInstance, 0),
 		client:      client,
-		packetHooks: make(map[int32][]PacketHook),
+		packetHooks: make(map[int32][]interfaces.PacketHook),
 	}
 }
 
 // LoadPlugin loads a plugin from the specified path
 func (m *Manager) LoadPlugin(path string) error {
-	p, err := plugin.Open(path)
-	if err != nil {
-		return fmt.Errorf("failed to open plugin: %v", err)
+	m.client.GetLogger().Info("PluginManager", "Loading plugin from %s", path)
+
+	// Get the directory containing the plugin file
+	dir := filepath.Dir(path)
+
+	// Get the package name from the directory
+	pkgName := filepath.Base(dir)
+
+	// Create a new instance of the plugin based on the package name
+	var pluginInstance interfaces.Plugin
+	switch pkgName {
+	case "example":
+		pluginInstance = example.NewExamplePlugin()
+	default:
+		return fmt.Errorf("unknown plugin package: %s", pkgName)
 	}
 
-	symPlugin, err := p.Lookup("Plugin")
-	if err != nil {
-		return fmt.Errorf("plugin does not export 'Plugin': %v", err)
-	}
-
-	instance, ok := symPlugin.(Plugin)
-	if !ok {
-		return fmt.Errorf("invalid plugin type")
-	}
-
-	// Initialize the plugin
-	if err := instance.Initialize(m.client); err != nil {
+	// Initialize the plugin with the client
+	if err := pluginInstance.Initialize(m.client); err != nil {
 		return fmt.Errorf("failed to initialize plugin: %v", err)
 	}
 
-	plugin := &PluginInstance{
-		Name:     instance.Name(),
-		Instance: instance,
-		client:   m.client,
+	// Register the plugin with the manager
+	if err := pluginInstance.Register(m); err != nil {
+		return fmt.Errorf("failed to register plugin: %v", err)
 	}
 
-	m.plugins = append(m.plugins, plugin)
-
 	// Enable the plugin
-	return instance.OnEnable()
+	if err := pluginInstance.OnEnable(); err != nil {
+		return fmt.Errorf("failed to enable plugin: %v", err)
+	}
+
+	return nil
 }
 
 // UnloadPlugin disables and unloads a plugin
@@ -97,16 +89,16 @@ func (m *Manager) UnloadPlugin(name string) error {
 }
 
 // RegisterPacketHook registers a packet handler for a specific packet type
-func (m *Manager) RegisterPacketHook(packetType int32, hook PacketHook) {
+func (m *Manager) RegisterPacketHook(packetType int32, hook interfaces.PacketHook) {
 	if hooks, exists := m.packetHooks[packetType]; exists {
 		m.packetHooks[packetType] = append(hooks, hook)
 	} else {
-		m.packetHooks[packetType] = []PacketHook{hook}
+		m.packetHooks[packetType] = []interfaces.PacketHook{hook}
 	}
 }
 
 // UnregisterPacketHook removes a packet handler
-func (m *Manager) UnregisterPacketHook(packetType int32, hook PacketHook) {
+func (m *Manager) UnregisterPacketHook(packetType int32, hook interfaces.PacketHook) {
 	if hooks, exists := m.packetHooks[packetType]; exists {
 		for i, h := range hooks {
 			if &h == &hook {
@@ -129,26 +121,17 @@ func (m *Manager) HandlePacket(packet packets.Packet) error {
 	return nil
 }
 
-// SwitchServer switches the client to the specified server
-func (m *Manager) SwitchServer(serverName string) error {
-	return m.client.SwitchServer(serverName)
-}
-
-// GetCurrentServer returns the current server configuration
-func (m *Manager) GetCurrentServer() *models.Server {
-	return m.client.GetCurrentServer()
-}
-
-// GetAvailableServers returns a list of all available servers
-func (m *Manager) GetAvailableServers() models.ServerList {
-	if models.CachedServers != nil {
-		return models.CachedServers
-	}
-	return models.ServerList{models.DefaultServer.Name: models.DefaultServer}
+// RegisterPlugin registers a plugin with the manager
+func (m *Manager) RegisterPlugin(plugin interfaces.Plugin) {
+	m.plugins = append(m.plugins, &PluginInstance{
+		Name:     plugin.Name(),
+		Instance: plugin,
+	})
+	m.client.GetLogger().Info("PluginManager", "Registered plugin: %s", plugin.Name())
 }
 
 // GetPlugin returns a loaded plugin by name
-func (m *Manager) GetPlugin(name string) Plugin {
+func (m *Manager) GetPlugin(name string) interfaces.Plugin {
 	for _, plugin := range m.plugins {
 		if plugin.Name == name {
 			return plugin.Instance
@@ -158,8 +141,8 @@ func (m *Manager) GetPlugin(name string) Plugin {
 }
 
 // GetPlugins returns all loaded plugins
-func (m *Manager) GetPlugins() []Plugin {
-	plugins := make([]Plugin, 0, len(m.plugins))
+func (m *Manager) GetPlugins() []interfaces.Plugin {
+	plugins := make([]interfaces.Plugin, 0, len(m.plugins))
 	for _, plugin := range m.plugins {
 		plugins = append(plugins, plugin.Instance)
 	}
@@ -193,4 +176,30 @@ func (m *Manager) LoadPluginsFromDirectory(dir string) error {
 	}
 
 	return nil
+}
+
+// SendPacket sends a packet through the client connection
+func (m *Manager) SendPacket(packet packets.Packet) error {
+	if m.client == nil {
+		return fmt.Errorf("client not initialized")
+	}
+	return m.client.Send(packet)
+}
+
+// SwitchServer switches the client to the specified server
+func (m *Manager) SwitchServer(serverName string) error {
+	return m.client.SwitchServer(serverName)
+}
+
+// GetCurrentServer returns the current server configuration
+func (m *Manager) GetCurrentServer() *models.Server {
+	return m.client.GetCurrentServer()
+}
+
+// GetAvailableServers returns a list of all available servers
+func (m *Manager) GetAvailableServers() models.ServerList {
+	if models.CachedServers != nil {
+		return models.CachedServers
+	}
+	return models.ServerList{models.DefaultServer.Name: models.DefaultServer}
 }

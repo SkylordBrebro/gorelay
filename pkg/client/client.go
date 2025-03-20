@@ -364,7 +364,7 @@ func (c *Client) Connect() error {
 
 		c.logger.Info("Client", "Sending Hello")
 
-		if err := c.sendPacket(hello); err != nil {
+		if err := c.Send(hello); err != nil {
 			c.logger.Error("Client", "Failed to send Hello packet: %v", err)
 			c.conn.Close()
 			continue
@@ -380,35 +380,140 @@ func (c *Client) Connect() error {
 		c.maxReconnectAttempts, lastErr)
 }
 
-// sendPacket sends a packet to the server with proper RC4 encryption and header construction
-func (c *Client) sendPacket(p packets.Packet) error {
-	// Create packet writer and write packet contents
-	writer := packets.NewPacketWriter()
-	p.Write(writer)
+// Send sends a packet to the server
+func (c *Client) Send(packet interface{}) error {
+	if !c.connected {
+		return fmt.Errorf("not connected")
+	}
 
-	// Create header with packet size and ID
-	header := packets.NewPacketWriter()
-	header.WriteInt32(int32(5 + len(writer.Bytes())))
-	header.WriteByte(byte(p.ID()))
-	header.WriteBytes(writer.Bytes())
+	// Set write deadline for sending packet
+	if err := c.conn.SetWriteDeadline(time.Now().Add(c.writeTimeout)); err != nil {
+		return fmt.Errorf("failed to set write deadline: %v", err)
+	}
 
-	// Get final encoded bytes
-	data := header.Bytes()
+	var data []byte
+	var err error
+	var packetType interfaces.PacketType
 
-	// Make a copy for encryption
+	// Handle different packet types
+	switch p := packet.(type) {
+	case *client.Load:
+		// Create packet header
+		writer := packets.NewPacketWriter()
+		// Write packet size (4 bytes) - will update after writing data
+		writer.WriteInt32(0)
+		// Write packet type (1 byte)
+		writer.WriteByte(byte(interfaces.Load))
+		// Write packet data
+		if err := p.Write(writer); err != nil {
+			return fmt.Errorf("failed to write Load packet: %v", err)
+		}
+		// Update packet size
+		data = writer.Bytes()
+		binary.BigEndian.PutUint32(data[0:4], uint32(len(data)))
+		packetType = interfaces.Load
+
+	case *client.Create:
+		writer := packets.NewPacketWriter()
+		writer.WriteInt32(0)
+		writer.WriteByte(byte(interfaces.Create))
+		if err := p.Write(writer); err != nil {
+			return fmt.Errorf("failed to write Create packet: %v", err)
+		}
+		data = writer.Bytes()
+		binary.BigEndian.PutUint32(data[0:4], uint32(len(data)))
+		packetType = interfaces.Create
+
+	case *client.Pong:
+		writer := packets.NewPacketWriter()
+		writer.WriteInt32(0)
+		writer.WriteByte(byte(interfaces.Pong))
+		if err := p.Write(writer); err != nil {
+			return fmt.Errorf("failed to write Pong packet: %v", err)
+		}
+		data = writer.Bytes()
+		binary.BigEndian.PutUint32(data[0:4], uint32(len(data)))
+		packetType = interfaces.Pong
+
+	case *client.UpdateAck:
+		writer := packets.NewPacketWriter()
+		writer.WriteInt32(0)
+		writer.WriteByte(byte(interfaces.UpdateAck))
+		if err := p.Write(writer); err != nil {
+			return fmt.Errorf("failed to write UpdateAck packet: %v", err)
+		}
+		data = writer.Bytes()
+		binary.BigEndian.PutUint32(data[0:4], uint32(len(data)))
+		packetType = interfaces.UpdateAck
+
+	case *client.ShootAckCounter:
+		writer := packets.NewPacketWriter()
+		writer.WriteInt32(0)
+		writer.WriteByte(byte(interfaces.ShootAckCounter))
+		if err := p.Write(writer); err != nil {
+			return fmt.Errorf("failed to write ShootAckCounter packet: %v", err)
+		}
+		data = writer.Bytes()
+		binary.BigEndian.PutUint32(data[0:4], uint32(len(data)))
+		packetType = interfaces.ShootAckCounter
+
+	case *client.Move:
+		writer := packets.NewPacketWriter()
+		writer.WriteInt32(0)
+		writer.WriteByte(byte(interfaces.Move))
+		if err := p.Write(writer); err != nil {
+			return fmt.Errorf("failed to write Move packet: %v", err)
+		}
+		data = writer.Bytes()
+		binary.BigEndian.PutUint32(data[0:4], uint32(len(data)))
+		packetType = interfaces.Move
+
+	case *client.GotoAck:
+		writer := packets.NewPacketWriter()
+		writer.WriteInt32(0)
+		writer.WriteByte(byte(interfaces.GotoAck))
+		if err := p.Write(writer); err != nil {
+			return fmt.Errorf("failed to write GotoAck packet: %v", err)
+		}
+		data = writer.Bytes()
+		binary.BigEndian.PutUint32(data[0:4], uint32(len(data)))
+		packetType = interfaces.GotoAck
+
+	case packets.Packet:
+		writer := packets.NewPacketWriter()
+		writer.WriteInt32(0)
+		writer.WriteByte(byte(p.Type()))
+		if err := p.Write(writer); err != nil {
+			return fmt.Errorf("failed to write packet: %v", err)
+		}
+		data = writer.Bytes()
+		binary.BigEndian.PutUint32(data[0:4], uint32(len(data)))
+		packetType = p.Type()
+
+	default:
+		return fmt.Errorf("unsupported packet type: %T", packet)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to encode packet: %v", err)
+	}
+
+	// Log outgoing packet before encryption
+	c.logger.Debug("Client", "SEND [%d] Type: %d, Length: %d, Data: %#v",
+		packetType, int(packetType), len(data), packet)
+
+	// Make a copy of the data for encryption
 	encryptedData := make([]byte, len(data))
 	copy(encryptedData, data)
 
-	// Encrypt payload (skip header)
-	c.rc4.Encrypt(encryptedData)
-
-	// Send to server
-	if _, err := c.conn.Write(encryptedData); err != nil {
-		c.logger.Error("Client", "Failed to send packet: %v", err)
-		return err
+	// Encrypt if RC4 is initialized
+	if c.rc4 != nil {
+		c.rc4.Encrypt(encryptedData)
 	}
 
-	return nil
+	// Send the encrypted packet
+	_, err = c.conn.Write(encryptedData)
+	return err
 }
 
 // Disconnect closes the connection to the game server
@@ -513,7 +618,7 @@ func (c *Client) registerPacketHandlers() {
 			load := &client.Load{
 				CharacterID: c.accountInfo.CharInfo.CharID,
 			}
-			if err := c.send(load); err != nil {
+			if err := c.Send(load); err != nil {
 				c.logger.Error("Client", "Failed to send Load packet: %v", err)
 			}
 			return nil
@@ -538,14 +643,14 @@ func (c *Client) registerPacketHandlers() {
 				IsChallenger: false,
 				IsSeasonal:   false,
 			}
-			if err := c.send(create); err != nil {
+			if err := c.Send(create); err != nil {
 				c.logger.Error("Client", "Failed to send Create packet: %v", err)
 			}
 		} else {
 			load := &client.Load{
 				CharacterID: int32(c.accountInfo.Chars.Characters[0].ID),
 			}
-			if err := c.send(load); err != nil {
+			if err := c.Send(load); err != nil {
 				c.logger.Error("Client", "Failed to send Load packet: %v", err)
 			}
 			c.logger.Info("Client", "Loading character %d", load.CharacterID)
@@ -578,7 +683,7 @@ func (c *Client) registerPacketHandlers() {
 			Amount: 1,
 		}
 
-		if err := c.send(shootAck); err != nil {
+		if err := c.Send(shootAck); err != nil {
 			c.logger.Error("Client", "Failed to send ShootAck: %v", err)
 		}
 
@@ -603,7 +708,7 @@ func (c *Client) registerPacketHandlers() {
 			Time:   int32(currentTime % (1 << 31)), // Ensure time fits in int32
 		}
 
-		if err := c.send(pong); err != nil {
+		if err := c.Send(pong); err != nil {
 			c.logger.Error("Client", "Failed to send Pong: %v", err)
 		}
 		return nil
@@ -624,7 +729,7 @@ func (c *Client) registerPacketHandlers() {
 
 		// Send UpdateAck as keep-alive response
 		updateAck := &client.UpdateAck{}
-		if err := c.send(updateAck); err != nil {
+		if err := c.Send(updateAck); err != nil {
 			c.logger.Error("Client", "Failed to send UpdateAck: %v", err)
 		}
 
@@ -669,7 +774,7 @@ func (c *Client) registerPacketHandlers() {
 
 		movePacket.Records = append(movePacket.Records, record)
 
-		if err := c.send(movePacket); err != nil {
+		if err := c.Send(movePacket); err != nil {
 			c.logger.Error("Client", "Failed to send Move response to NewTick: %v", err)
 		}
 
@@ -866,7 +971,7 @@ func (c *Client) registerPacketHandlers() {
 		gotoAck.Time = int32(c.state.LastFrameTime)
 		gotoAck.Unknown = false
 
-		if err := c.send(gotoAck); err != nil {
+		if err := c.Send(gotoAck); err != nil {
 			c.logger.Error("Client", "Failed to send GotoAck: %v", err)
 		}
 
@@ -1197,142 +1302,6 @@ func (c *Client) reconnect() {
 			c.reconnectAttempts = 0 // Reset counter on successful connection
 		}
 	}()
-}
-
-// send sends a packet to the server
-func (c *Client) send(packet interface{}) error {
-	if !c.connected {
-		return fmt.Errorf("not connected")
-	}
-
-	// Set write deadline for sending packet
-	if err := c.conn.SetWriteDeadline(time.Now().Add(c.writeTimeout)); err != nil {
-		return fmt.Errorf("failed to set write deadline: %v", err)
-	}
-
-	var data []byte
-	var err error
-	var packetType interfaces.PacketType
-
-	// Handle different packet types
-	switch p := packet.(type) {
-	case *client.Load:
-		// Create packet header
-		writer := packets.NewPacketWriter()
-		// Write packet size (4 bytes) - will update after writing data
-		writer.WriteInt32(0)
-		// Write packet type (1 byte)
-		writer.WriteByte(byte(interfaces.Load))
-		// Write packet data
-		if err := p.Write(writer); err != nil {
-			return fmt.Errorf("failed to write Load packet: %v", err)
-		}
-		// Update packet size
-		data = writer.Bytes()
-		binary.BigEndian.PutUint32(data[0:4], uint32(len(data)))
-		packetType = interfaces.Load
-
-	case *client.Create:
-		writer := packets.NewPacketWriter()
-		writer.WriteInt32(0)
-		writer.WriteByte(byte(interfaces.Create))
-		if err := p.Write(writer); err != nil {
-			return fmt.Errorf("failed to write Create packet: %v", err)
-		}
-		data = writer.Bytes()
-		binary.BigEndian.PutUint32(data[0:4], uint32(len(data)))
-		packetType = interfaces.Create
-
-	case *client.Pong:
-		writer := packets.NewPacketWriter()
-		writer.WriteInt32(0)
-		writer.WriteByte(byte(interfaces.Pong))
-		if err := p.Write(writer); err != nil {
-			return fmt.Errorf("failed to write Pong packet: %v", err)
-		}
-		data = writer.Bytes()
-		binary.BigEndian.PutUint32(data[0:4], uint32(len(data)))
-		packetType = interfaces.Pong
-
-	case *client.UpdateAck:
-		writer := packets.NewPacketWriter()
-		writer.WriteInt32(0)
-		writer.WriteByte(byte(interfaces.UpdateAck))
-		if err := p.Write(writer); err != nil {
-			return fmt.Errorf("failed to write UpdateAck packet: %v", err)
-		}
-		data = writer.Bytes()
-		binary.BigEndian.PutUint32(data[0:4], uint32(len(data)))
-		packetType = interfaces.UpdateAck
-
-	case *client.ShootAckCounter:
-		writer := packets.NewPacketWriter()
-		writer.WriteInt32(0)
-		writer.WriteByte(byte(interfaces.ShootAckCounter))
-		if err := p.Write(writer); err != nil {
-			return fmt.Errorf("failed to write ShootAckCounter packet: %v", err)
-		}
-		data = writer.Bytes()
-		binary.BigEndian.PutUint32(data[0:4], uint32(len(data)))
-		packetType = interfaces.ShootAckCounter
-
-	case *client.Move:
-		writer := packets.NewPacketWriter()
-		writer.WriteInt32(0)
-		writer.WriteByte(byte(interfaces.Move))
-		if err := p.Write(writer); err != nil {
-			return fmt.Errorf("failed to write Move packet: %v", err)
-		}
-		data = writer.Bytes()
-		binary.BigEndian.PutUint32(data[0:4], uint32(len(data)))
-		packetType = interfaces.Move
-
-	case *client.GotoAck:
-		writer := packets.NewPacketWriter()
-		writer.WriteInt32(0)
-		writer.WriteByte(byte(interfaces.GotoAck))
-		if err := p.Write(writer); err != nil {
-			return fmt.Errorf("failed to write GotoAck packet: %v", err)
-		}
-		data = writer.Bytes()
-		binary.BigEndian.PutUint32(data[0:4], uint32(len(data)))
-		packetType = interfaces.GotoAck
-
-	case packets.Packet:
-		writer := packets.NewPacketWriter()
-		writer.WriteInt32(0)
-		writer.WriteByte(byte(p.Type()))
-		if err := p.Write(writer); err != nil {
-			return fmt.Errorf("failed to write packet: %v", err)
-		}
-		data = writer.Bytes()
-		binary.BigEndian.PutUint32(data[0:4], uint32(len(data)))
-		packetType = p.Type()
-
-	default:
-		return fmt.Errorf("unsupported packet type: %T", packet)
-	}
-
-	if err != nil {
-		return fmt.Errorf("failed to encode packet: %v", err)
-	}
-
-	// Log outgoing packet before encryption
-	c.logger.Debug("Client", "SEND [%d] Type: %d, Length: %d, Data: %#v",
-		packetType, int(packetType), len(data), packet)
-
-	// Make a copy of the data for encryption
-	encryptedData := make([]byte, len(data))
-	copy(encryptedData, data)
-
-	// Encrypt if RC4 is initialized
-	if c.rc4 != nil {
-		c.rc4.Encrypt(encryptedData)
-	}
-
-	// Send the encrypted packet
-	_, err = c.conn.Write(encryptedData)
-	return err
 }
 
 // SwitchServer changes the client's server and attempts to connect to it

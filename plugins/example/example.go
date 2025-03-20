@@ -1,22 +1,50 @@
-package main
+package example
 
 import (
+	"fmt"
 	"gorelay/pkg/client"
+	"gorelay/pkg/interfaces"
+	"gorelay/pkg/packets"
+	clientpackets "gorelay/pkg/packets/client"
+	packetinterfaces "gorelay/pkg/packets/interfaces"
 	"gorelay/pkg/packets/server"
 )
 
 // ExamplePlugin is a basic plugin that demonstrates the plugin system
 type ExamplePlugin struct {
-	client *client.Client
+	client       *client.Client
+	manager      interfaces.PluginManager
+	targetName   string
+	responseText string
 }
 
-// Plugin is the exported symbol that the plugin manager looks for
-var Plugin ExamplePlugin
+// NewExamplePlugin creates a new instance of ExamplePlugin
+func NewExamplePlugin() interfaces.Plugin {
+	return &ExamplePlugin{
+		targetName:   "Brebro",
+		responseText: "Hello! This is an automated response.",
+	}
+}
 
 // Initialize sets up the plugin
 func (p *ExamplePlugin) Initialize(c *client.Client) error {
 	p.client = c
 	p.client.GetLogger().Info("HelloWorld", "Plugin initialized!")
+	return nil
+}
+
+// Register registers this plugin with the plugin manager
+func (p *ExamplePlugin) Register(manager interfaces.PluginManager) error {
+	p.manager = manager
+	manager.RegisterPlugin(p)
+
+	// Register packet hooks
+	manager.RegisterPacketHook(int32(packetinterfaces.Text), p.handleText)
+	manager.RegisterPacketHook(int32(packetinterfaces.MapInfo), p.handleMapInfo)
+	manager.RegisterPacketHook(int32(packetinterfaces.NewTick), p.handleNewTick)
+	manager.RegisterPacketHook(int32(packetinterfaces.Update), p.handleUpdate)
+	manager.RegisterPacketHook(int32(packetinterfaces.AllyShoot), p.handleAllyShoot)
+
 	return nil
 }
 
@@ -37,7 +65,7 @@ func (p *ExamplePlugin) Version() string {
 
 // Description returns the plugin description
 func (p *ExamplePlugin) Description() string {
-	return "A Hello World plugin that demonstrates logging"
+	return "A Hello World plugin that demonstrates logging and message handling"
 }
 
 // OnEnable is called when the plugin is enabled
@@ -52,31 +80,49 @@ func (p *ExamplePlugin) OnDisable() error {
 	return nil
 }
 
-// OnMapInfo is called when a MapInfo packet is received
-func (p *ExamplePlugin) OnMapInfo(packet *server.MapInfo) {
-	p.client.GetLogger().Info("HelloWorld", "Hello from map: %s!", packet.Name)
+// Packet handlers
+func (p *ExamplePlugin) handleText(packet packets.Packet) error {
+	textPacket := packet.(*server.Text)
+	p.client.GetLogger().Info("HelloWorld", "<%s> %s", textPacket.Name, textPacket.RawText)
+
+	if textPacket.Recipient == "Extreem" {
+		p.client.GetLogger().Info("HelloWorld", "Received direct message from %s: %s", textPacket.Name, textPacket.RawText)
+
+		reply := clientpackets.NewPlayerText()
+		reply.Text = fmt.Sprintf("/tell %s %s", textPacket.Name, p.responseText)
+
+		p.client.GetLogger().Debug("HelloWorld", "Attempting to send reply packet: %s", reply.Text)
+
+		if err := p.client.Send(reply); err != nil {
+			p.client.GetLogger().Error("HelloWorld", "Failed to send reply: %v", err)
+		} else {
+			p.client.GetLogger().Info("HelloWorld", "Successfully sent PlayerText packet: %s", reply.Text)
+		}
+	}
+	return nil
 }
 
-// OnNewTick is called when a NewTick packet is received
-func (p *ExamplePlugin) OnNewTick(packet *server.NewTick) {
+func (p *ExamplePlugin) handleMapInfo(packet packets.Packet) error {
+	mapInfo := packet.(*server.MapInfo)
+	p.client.GetLogger().Info("HelloWorld", "Hello from map: %s!", mapInfo.Name)
+	return nil
+}
+
+func (p *ExamplePlugin) handleNewTick(packet packets.Packet) error {
 	// We'll leave this empty to avoid spam
+	return nil
 }
 
-// OnUpdate is called when an Update packet is received
-func (p *ExamplePlugin) OnUpdate(packet *server.Update) {
+func (p *ExamplePlugin) handleUpdate(packet packets.Packet) error {
 	// We'll leave this empty to avoid spam
+	return nil
 }
 
-// OnPlayerShoot is called when a PlayerShoot packet is received
-func (p *ExamplePlugin) OnPlayerShoot(packet *server.AllyShoot) {
-	// Log player shooting events if needed
+func (p *ExamplePlugin) handleAllyShoot(packet packets.Packet) error {
+	shoot := packet.(*server.AllyShoot)
 	p.client.GetLogger().Debug("HelloWorld", "Player shot projectile: ID=%d, ContainerType=%d",
-		packet.BulletId, packet.ContainerType)
-}
-
-// OnText is called when a Text packet is received
-func (p *ExamplePlugin) OnText(packet *server.Text) {
-	p.client.GetLogger().Info("HelloWorld", "<%s> %s", packet.Name, packet.RawText)
+		shoot.BulletId, shoot.ContainerType)
+	return nil
 }
 
 // OnUnknownPacket is called when an unknown packet is received
@@ -84,4 +130,13 @@ func (p *ExamplePlugin) OnUnknownPacket(packetID int, data []byte) {
 	// Log unknown packets for debugging
 	p.client.GetLogger().Debug("HelloWorld", "Received unknown packet ID %d with %d bytes",
 		packetID, len(data))
+}
+
+// init registers the plugin with the plugin manager
+func init() {
+	// The plugin will be loaded by the plugin manager
+	plugin := NewExamplePlugin()
+	if plugin == nil {
+		panic("failed to create example plugin")
+	}
 }
